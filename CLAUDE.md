@@ -27,6 +27,8 @@ This project is built with Claude Code supervising and Codex doing the actual im
 
 Do not have Claude Code write application code directly under this workflow — that's Codex's job. Claude Code writes/updates specs, plans, and this file.
 
+**Known environment gap:** Codex's sandbox has no network access, so it cannot run `npm install`, hit the AI Gateway, or reach any external API — only the supervising Claude Code session can. For any task step that needs network (installing deps, live API verification), Claude Code runs that step itself after Codex writes the code, then reports results back into the loop. Don't send Codex back to retry a network call — it will hit the same wall every time.
+
 ## Project memory
 
 - After finishing a task (or a work session), run `claude-md-management:revise-claude-md` to fold in what changed — new decisions, new constraints discovered, anything that would surprise a future session.
@@ -42,4 +44,5 @@ Do not have Claude Code write application code directly under this workflow — 
 
 ## Recent decisions
 
-- 2026-09-01: Design spec and MVP implementation plan written and approved. Starting Task 1 (project scaffolding) next.
+- 2026-09-01: Task 1 (scaffolding) done. Discovered Codex's sandbox has no network access — `npm install`/build verification now run from the Claude Code session, not Codex. Documented above.
+- 2026-09-01: Design spec and MVP implementation plan written and approved.
