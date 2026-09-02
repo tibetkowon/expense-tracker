@@ -29,6 +29,10 @@ Do not have Claude Code write application code directly under this workflow — 
 
 **Known environment gap:** Codex's sandbox has no network access and can't bind local ports — it cannot run `npm install`, hit the AI Gateway, reach any external API, or run `next build`/`next dev` with Turbopack (Turbopack binds a local port even for a one-shot build; fails with `Operation not permitted`). Codex can fall back to `next build --webpack` to type-check/compile without hitting that wall. For anything that genuinely needs network or a bound port, the supervising Claude Code session runs it after Codex writes the code, then reports results back into the loop. Don't send Codex back to retry a network or Turbopack build — it will hit the same wall every time.
 
+**Polling a Codex background job:** `node <codex-companion.mjs path> status <jobId> --json`, condensed via `python3 -c "import json,sys; d=json.load(sys.stdin); print(d['job']['status'], d['job']['phase'], d['job']['elapsed']); [print(p) for p in d['job']['progressPreview']]"`. Fetch the final report with `... result <jobId>` once `status` is `completed`.
+
+**Importing a Claude Design (claude.ai/design) mockup:** the `DesignSync` MCP needs `/design-login`, which requires an interactive terminal this session doesn't have — it'll error out. Ask the user to export a handoff `.zip` from the design and upload it instead. Extract with `python3 -c "import zipfile; ..."`, not `unzip` — Korean filenames get mangled by macOS `unzip`'s default codepage. Keep the relevant `.dc.html` file(s) as committed reference under `docs/superpowers/specs/design/`.
+
 ## Project memory
 
 - After finishing a task (or a work session), run `claude-md-management:revise-claude-md` to fold in what changed — new decisions, new constraints discovered, anything that would surprise a future session.
@@ -47,16 +51,15 @@ Do not have Claude Code write application code directly under this workflow — 
 - OCR is auto-draft + human-confirm, never auto-save.
 - Automated collection (CODEF, SMS, email parsing) is deferred, not cancelled — see spec §2/§7 before re-investigating.
 
+## Status
+
+Tasks 1–5 done and verified (scaffolding, Google sign-in, Sheets wrapper, Drive folder picker, manual entry, list/summary, visual design). Tasks 6 (receipt OCR), 7 (OCR-to-form integration), 8 (PWA installability) remain — see the plan doc's checkboxes for exact step-level status.
+
 ## Recent decisions
 
-- 2026-09-02: Task 5 done — recent list, monthly summary, ExpenseDashboard, and the "minimal" visual design from the user's Claude Design handoff applied across the whole screen (restyled FolderPicker/ExpenseForm too, since the design covers the composition as a whole). Design source lives at `docs/superpowers/specs/design/ExpenseScreen.dc.html`. Payment method changed from free text to a fixed select; category presets expanded to 9. MVP is now feature-complete except OCR (Task 6/7) and PWA installability (Task 8).
-- 2026-09-02: Fixed a real save-failing bug found via manual testing — Google names a new spreadsheet's first tab per account locale ("시트1" for Korean, not "Sheet1"), but the hardcoded `SHEET_RANGE = 'Sheet1!A:E'` assumed English. `findOrCreateSpreadsheet` now force-renames the first tab (sheetId 0) to "Sheet1" on both the create AND found-existing paths (idempotent, so it also self-heals the user's already-broken spreadsheet from their first failed attempt). Fully-mocked tests couldn't have caught this — a reminder that this class of bug only shows up in real API testing.
-- 2026-09-02: Task 4 (manual entry) done — form + POST /api/expenses, ExpenseForm reads getSavedFolderId() itself (per the Architecture notes pattern). page.tsx's onSubmitted wiring is a harmless empty-server-action stub until Task 5's ExpenseDashboard replaces it.
-- 2026-09-02: Task 3b fully verified — user confirmed folder picker works end to end in the browser after enabling Drive/Sheets/Picker APIs and adding a Picker-restricted API key. Added Task 3b (Drive folder picker, spec §3 item 6) mid-build at user request — Google Picker lets the user choose a Drive folder for the sheet, id+name persisted to localStorage (no DB). Revealed `app/page.tsx`'s server-component state limitation (see Architecture notes above); fixed forward in Task 4/5/7's plan text before they were built, so no rework was needed.
-- 2026-09-02: Task 3 (Sheets wrapper) done — Codex completed it entirely within its own sandbox since the test is fully mocked (no network/port needed).
-- 2026-09-02: Task 2 fully verified end to end (real Google sign-in works). Sandbox gap note refined: Codex can't bind local ports either, not just missing network — `next build` (Turbopack) fails there, `next build --webpack` is Codex's own fallback for a code-correctness check, Claude Code still re-verifies with the real build before committing.
-- 2026-09-01: Task 1 (scaffolding) done. Discovered Codex's sandbox has no network access — install/build verification run from the Claude Code session, not Codex.
-- 2026-09-01: Design spec and MVP implementation plan written and approved.
+- 2026-09-02: Task 5 done — recent list, monthly summary, `ExpenseDashboard`, and the "minimal" visual design from the user's Claude Design handoff applied across the whole screen (restyled `FolderPicker`/`ExpenseForm` too, since the design covers the composition as a whole). Design source: `docs/superpowers/specs/design/ExpenseScreen.dc.html`. Payment method changed from free text to a fixed select; category presets expanded to 9.
+- 2026-09-02: Fixed a real save-failing bug found via manual testing — Google names a new spreadsheet's first tab per account locale ("시트1" for Korean, not "Sheet1"), but the hardcoded `SHEET_RANGE = 'Sheet1!A:E'` assumed English. `findOrCreateSpreadsheet` force-renames the first tab (sheetId 0) to "Sheet1" on both the create AND found-existing paths (idempotent, self-heals). Fully-mocked tests couldn't have caught this — reminder that this class of bug only shows up in real API testing.
+- 2026-09-02: Task 3b (Drive folder picker) added mid-build at user request, fully verified end to end. Revealed `app/page.tsx`'s server-component state limitation (see Architecture notes); also revealed that Drive/Sheets/Picker APIs need explicit enabling in Google Cloud Console — OAuth client creation alone doesn't do it.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

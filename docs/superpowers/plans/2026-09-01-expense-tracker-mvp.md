@@ -34,7 +34,7 @@
 - Consumes: nothing (first task)
 - Produces: a running Next.js dev server at `/`; `npm test` and `npm run build` commands that later tasks rely on
 
-- [ ] **Step 1: Scaffold the Next.js app**
+- [x] **Step 1: Scaffold the Next.js app**
 
 ```bash
 npx create-next-app@latest . --typescript --tailwind --app --no-src-dir --import-alias "@/*" --eslint --use-npm
@@ -42,14 +42,14 @@ npx create-next-app@latest . --typescript --tailwind --app --no-src-dir --import
 
 When prompted about a non-empty directory (the `.claude/` and `docs/` folders already exist), confirm to proceed.
 
-- [ ] **Step 2: Install additional dependencies**
+- [x] **Step 2: Install additional dependencies**
 
 ```bash
 npm install next-auth@beta googleapis ai zod
 npm install -D vitest @testing-library/react @testing-library/jest-dom @vitejs/plugin-react jsdom
 ```
 
-- [ ] **Step 3: Configure Vitest**
+- [x] **Step 3: Configure Vitest**
 
 Create `vitest.config.ts`:
 
@@ -80,7 +80,7 @@ Add to `package.json` scripts:
 "test:watch": "vitest"
 ```
 
-- [ ] **Step 4: Write a trivial smoke test to confirm the test runner works**
+- [x] **Step 4: Write a trivial smoke test to confirm the test runner works**
 
 Create `app/page.test.tsx`:
 
@@ -94,7 +94,7 @@ describe('sanity check', () => {
 });
 ```
 
-- [ ] **Step 5: Run the test suite and the build to confirm the scaffold is sound**
+- [x] **Step 5: Run the test suite and the build to confirm the scaffold is sound**
 
 Run: `npm test`
 Expected: 1 passed
@@ -102,7 +102,7 @@ Expected: 1 passed
 Run: `npm run build`
 Expected: build succeeds with no type errors
 
-- [ ] **Step 6: Create `.env.local.example` documenting required env vars (filled in during Task 2 and Task 6)**
+- [x] **Step 6: Create `.env.local.example` documenting required env vars (filled in during Task 2 and Task 6)**
 
 ```bash
 AUTH_GOOGLE_ID=
@@ -111,7 +111,7 @@ AUTH_SECRET=
 AI_GATEWAY_API_KEY=
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add -A
@@ -132,7 +132,7 @@ git commit -m "chore: scaffold Next.js app with Vitest"
 - Consumes: nothing new
 - Produces: `auth()`, `signIn()`, `signOut()`, `handlers` exported from `auth.ts`. `session.accessToken: string` and `session.error?: "RefreshTokenError"` available server-side via `await auth()`. `isTokenExpired(expiresAt: number): boolean` from `lib/token.ts`, used by later tasks to decide whether to prompt re-auth.
 
-- [ ] **Step 1: Write the failing test for the pure expiry-check helper**
+- [x] **Step 1: Write the failing test for the pure expiry-check helper**
 
 Create `lib/token.test.ts`:
 
@@ -155,12 +155,12 @@ describe('isTokenExpired', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run lib/token.test.ts`
 Expected: FAIL — `lib/token.ts` does not exist yet
 
-- [ ] **Step 3: Implement the helper**
+- [x] **Step 3: Implement the helper**
 
 Create `lib/token.ts`:
 
@@ -170,12 +170,12 @@ export function isTokenExpired(expiresAtSeconds: number): boolean {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run lib/token.test.ts`
 Expected: PASS (2 tests)
 
-- [ ] **Step 5: Configure NextAuth with Google provider, offline access, and the Sheets/Drive scopes**
+- [x] **Step 5: Configure NextAuth with Google provider, offline access, and the Sheets/Drive scopes**
 
 Create `auth.ts` (verified against current Auth.js docs — this is the refresh-token-rotation pattern from `authjs.dev/guides/refresh-token-rotation`, adapted with our own `isTokenExpired`):
 
@@ -285,22 +285,22 @@ import { handlers } from '@/auth';
 export const { GET, POST } = handlers;
 ```
 
-- [ ] **Step 6: Wire a minimal sign-in/sign-out UI into the home page**
+- [x] **Step 6: Wire a minimal sign-in/sign-out UI into the home page**
 
 Modify `app/page.tsx` to call `auth()` and show a "Sign in with Google" button (using the `signIn`/`signOut` server actions) when signed out, and the user's email when signed in. This is intentionally minimal — the real dashboard UI comes in Task 5.
 
-- [ ] **Step 7: Manual verification (cannot be unit-tested — requires real Google OAuth consent)**
+- [x] **Step 7: Manual verification (cannot be unit-tested — requires real Google OAuth consent)**
 
 1. Create a Google Cloud project, OAuth consent screen (External, Testing mode, your own account as a test user), and OAuth Client ID (Web application) with redirect URI `http://localhost:3000/api/auth/callback/google`.
 2. Fill `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, and a random `AUTH_SECRET` (generate with `npx auth secret`) into `.env.local`.
 3. Run `npm run dev`, click "Sign in with Google", confirm the consent screen lists Drive (app-created files) and Sheets access, and confirm you land back on `/` signed in.
 
-- [ ] **Step 8: Run full test suite and build**
+- [x] **Step 8: Run full test suite and build**
 
 Run: `npm test && npm run build`
 Expected: all tests pass, build succeeds
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add -A
@@ -322,7 +322,7 @@ git commit -m "feat: Google sign-in with Sheets/Drive scopes and token refresh"
   - `appendExpenseRow(accessToken: string, spreadsheetId: string, row: ExpenseRow): Promise<void>`
   - `readExpenseRows(accessToken: string, spreadsheetId: string): Promise<ExpenseRow[]>`
 
-- [ ] **Step 1: Write the failing tests using a mocked `googleapis` client**
+- [x] **Step 1: Write the failing tests using a mocked `googleapis` client**
 
 Create `lib/sheets.test.ts`:
 
@@ -419,12 +419,12 @@ describe('readExpenseRows', () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run lib/sheets.test.ts`
 Expected: FAIL — `lib/sheets.ts` does not exist yet
 
-- [ ] **Step 3: Implement the wrapper**
+- [x] **Step 3: Implement the wrapper**
 
 Create `lib/sheets.ts`:
 
@@ -514,12 +514,12 @@ export async function readExpenseRows(
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npx vitest run lib/sheets.test.ts`
 Expected: PASS (5 tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A
@@ -547,7 +547,7 @@ git commit -m "feat: Google Sheets wrapper (find-or-create, append, read)"
 
 **Required manual setup (pending on the user, same as Task 2 Step 7):** in Google Cloud Console, enable the **Google Picker API** (APIs & Services → Library), and create an API key (APIs & Services → Credentials → Create Credentials → API key), restricted to the Picker API. Add it to `.env.local` as `NEXT_PUBLIC_GOOGLE_API_KEY`. Also confirm **Google Drive API** and **Google Sheets API** are enabled there too — these were needed since Task 3 but never explicitly called out to enable them, which will surface as a runtime 403 the first time a real Sheets/Drive call is made if missed.
 
-- [ ] **Step 1: Write the failing tests for the folderId-aware Sheets wrapper**
+- [x] **Step 1: Write the failing tests for the folderId-aware Sheets wrapper**
 
 Modify `lib/sheets.test.ts`, adding these cases (keep the existing 5 tests as-is):
 
@@ -583,12 +583,12 @@ describe('findOrCreateSpreadsheet with a folderId', () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify the new ones fail**
+- [x] **Step 2: Run tests to verify the new ones fail**
 
 Run: `npx vitest run lib/sheets.test.ts`
 Expected: FAIL — current `findOrCreateSpreadsheet` doesn't accept or use a `folderId`
 
-- [ ] **Step 3: Update `findOrCreateSpreadsheet` to accept and use `folderId`**
+- [x] **Step 3: Update `findOrCreateSpreadsheet` to accept and use `folderId`**
 
 Modify `lib/sheets.ts`:
 
@@ -624,12 +624,12 @@ export async function findOrCreateSpreadsheet(
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npx vitest run lib/sheets.test.ts`
 Expected: PASS (7 tests: the original 5 plus 2 new ones)
 
-- [ ] **Step 5: Write the failing tests for folder storage**
+- [x] **Step 5: Write the failing tests for folder storage**
 
 Create `lib/folderStorage.test.ts`:
 
@@ -651,12 +651,12 @@ describe('folderStorage', () => {
 });
 ```
 
-- [ ] **Step 6: Run test to verify it fails**
+- [x] **Step 6: Run test to verify it fails**
 
 Run: `npx vitest run lib/folderStorage.test.ts`
 Expected: FAIL — `lib/folderStorage.ts` does not exist yet
 
-- [ ] **Step 7: Implement folder storage**
+- [x] **Step 7: Implement folder storage**
 
 Create `lib/folderStorage.ts`:
 
@@ -674,12 +674,12 @@ export function saveFolderId(id: string): void {
 }
 ```
 
-- [ ] **Step 8: Run test to verify it passes**
+- [x] **Step 8: Run test to verify it passes**
 
 Run: `npx vitest run lib/folderStorage.test.ts`
 Expected: PASS (2 tests)
 
-- [ ] **Step 9: Build the picker component**
+- [x] **Step 9: Build the picker component**
 
 Create `components/FolderPicker.tsx` — a client component (`'use client'`) that:
 1. On mount, loads `https://apis.google.com/js/api.js` (skip if already present on `window`), then calls `gapi.load('picker', () => setReady(true))`.
@@ -709,13 +709,13 @@ picker.setVisible(true);
 3. This pattern was verified live against Google's current Picker API docs on 2026-09-02 (`DocsView(ViewId.FOLDERS).setIncludeFolders(true).setMimeTypes('application/vnd.google-apps.folder').setSelectFolderEnabled(true)`) — if the implementing agent is running this later and the docs have moved on, re-check `https://developers.google.com/workspace/drive/picker/reference/picker.docsview.setselectfolderenabled` before trusting this snippet.
 4. There's no official TypeScript types package for the Picker API's `google`/`gapi` script-loaded globals — declare them loosely at the top of this file (`declare const gapi: any; declare const google: any;`) rather than fighting for exact types, so `tsc`/`next build` don't fail on missing declarations.
 
-- [ ] **Step 10: Wire it into `app/page.tsx`**
+- [x] **Step 10: Wire it into `app/page.tsx`**
 
 `app/page.tsx` is a server component (`async function Home()`), so it cannot hold `useState` itself. Render a self-contained client wrapper — e.g. `<FolderPickerSection accessToken={session.accessToken} apiKey={process.env.NEXT_PUBLIC_GOOGLE_API_KEY!} />` — above the expense form, where the wrapper owns its own `folderId`/`folderName` state, initializes it from `getSavedFolderId()` (plus a persisted display name, so a refresh doesn't show a raw folder ID) in a client-side effect, and shows "Drive 루트" when nothing's been picked. Any other component that needs to know the current folder (Task 4/5's form and list) reads `getSavedFolderId()` itself the same way — it's a plain function reading `localStorage`, not something that needs to be threaded down from this wrapper.
 
 **(Already implemented as of 2026-09-02 — see `components/FolderPicker.tsx`'s `FolderPickerSection` export for the actual pattern.)**
 
-- [ ] **Step 11: Update `.env.local.example`**
+- [x] **Step 11: Update `.env.local.example`**
 
 ```bash
 AUTH_GOOGLE_ID=
@@ -725,12 +725,12 @@ AI_GATEWAY_API_KEY=
 NEXT_PUBLIC_GOOGLE_API_KEY=
 ```
 
-- [ ] **Step 12: Run full test suite and build**
+- [x] **Step 12: Run full test suite and build**
 
 Run: `npm test && npm run build`
 Expected: all tests pass (12 total: 3 token + 7 sheets + 2 folderStorage), build succeeds
 
-- [ ] **Step 13: Commit**
+- [x] **Step 13: Commit**
 
 ```bash
 git add -A
@@ -753,7 +753,7 @@ git commit -m "feat: Drive folder picker for choosing where the sheet lives"
   - `validateExpenseInput(input: unknown): ExpenseInput` (throws `ZodError` on invalid input) from `lib/expense.ts`
   - `<ExpenseForm onSubmitted={() => void} initialValues={Partial<ExpenseInput>} />` from `components/ExpenseForm.tsx` — Task 7 passes `initialValues` from OCR results. No `folderId` prop: `app/page.tsx` is a server component and can't hold or pass down that state (see Task 3b Step 10), so `ExpenseForm` itself calls `getSavedFolderId()` at submit time and includes it in the POST body — same "read localStorage where it's needed" pattern `FolderPickerSection` already established
 
-- [ ] **Step 1: Write the failing tests for validation**
+- [x] **Step 1: Write the failing tests for validation**
 
 Create `lib/expense.test.ts`:
 
@@ -805,12 +805,12 @@ describe('validateExpenseInput', () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run lib/expense.test.ts`
 Expected: FAIL — `lib/expense.ts` does not exist yet
 
-- [ ] **Step 3: Implement validation with Zod**
+- [x] **Step 3: Implement validation with Zod**
 
 Create `lib/expense.ts`:
 
@@ -832,12 +832,12 @@ export function validateExpenseInput(input: unknown): ExpenseInput {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npx vitest run lib/expense.test.ts`
 Expected: PASS (4 tests)
 
-- [ ] **Step 5: Implement the POST route**
+- [x] **Step 5: Implement the POST route**
 
 Create `app/api/expenses/route.ts`:
 
@@ -864,20 +864,20 @@ export async function POST(request: Request) {
 }
 ```
 
-- [ ] **Step 6: Build the form component**
+- [x] **Step 6: Build the form component**
 
 Create `components/ExpenseForm.tsx` — a client component (`'use client'`) with controlled inputs for date/amount/category/memo/method, accepting an optional `initialValues: Partial<ExpenseInput>` prop (used later by Task 7's OCR flow) and an `onSubmitted: () => void` callback. The category field is a text input with a `<datalist>` of preset options (`식비`, `교통`, `쇼핑`, `주거`, `기타`) — this satisfies spec §3 item 4 ("기본 카테고리 + 커스텀 추가") without a separate category-management screen: presets show as suggestions, but any typed value is accepted and saved as-is. On submit, call `getSavedFolderId()` from `@/lib/folderStorage` and `POST` to `/api/expenses` with `fetch`, sending `{ ...formValues, folderId }` as the JSON body, show an inline error if the response is not OK, call `onSubmitted()` on success.
 
-- [ ] **Step 7: Wire the form into the signed-in view of `app/page.tsx`**
+- [x] **Step 7: Wire the form into the signed-in view of `app/page.tsx`**
 
 (Task 5 relocates this render into a new `ExpenseDashboard` client component so it can trigger a list refetch — expected, not a regression.)
 
-- [ ] **Step 8: Run full test suite and build**
+- [x] **Step 8: Run full test suite and build**
 
 Run: `npm test && npm run build`
 Expected: all tests pass, build succeeds
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add -A
@@ -904,7 +904,7 @@ This task both builds the still-missing list/summary pieces **and** restyles the
 - Consumes: `readExpenseRows` + `ExpenseRow` from Task 3, `findOrCreateSpreadsheet` (`(accessToken, folderId?)`) from Task 3/3b, `auth()` from Task 2, `getSavedFolderId` from Task 3b, `<ExpenseForm />` from Task 4
 - Produces: `summarizeByMonth(rows: ExpenseRow[], month: string): { total: number; count: number }` from `lib/summary.ts`. GET `/api/expenses?folderId=<id>` (folderId optional) returns `{ expenses: ExpenseRow[], monthlyTotal: number }`. `<Toast message={string | null} />` from `components/Toast.tsx` — a fixed bottom-center pill, reused for both logout confirmation and save-success feedback.
 
-- [ ] **Step 1: Write the failing tests for the summary function**
+- [x] **Step 1: Write the failing tests for the summary function**
 
 Create `lib/summary.test.ts`:
 
@@ -930,12 +930,12 @@ describe('summarizeByMonth', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run lib/summary.test.ts`
 Expected: FAIL — `lib/summary.ts` does not exist yet
 
-- [ ] **Step 3: Implement the summary function**
+- [x] **Step 3: Implement the summary function**
 
 Create `lib/summary.ts`:
 
@@ -951,12 +951,12 @@ export function summarizeByMonth(rows: ExpenseRow[], month: string): { total: nu
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run lib/summary.test.ts`
 Expected: PASS (2 tests)
 
-- [ ] **Step 5: Add the GET handler**
+- [x] **Step 5: Add the GET handler**
 
 Modify `app/api/expenses/route.ts` to add:
 
@@ -980,7 +980,7 @@ export async function GET(request: Request) {
 }
 ```
 
-- [ ] **Step 6a: Restyle `ExpenseForm.tsx` to match the design**
+- [x] **Step 6a: Restyle `ExpenseForm.tsx` to match the design**
 
 Open the minimal variant's form section in `docs/superpowers/specs/design/ExpenseScreen.dc.html` (the `지출 입력` block) and port it:
 - Category field: expand the preset `<datalist>` options to the design's `CATEGORIES` list — `식비`, `카페`, `교통`, `쇼핑`, `구독서비스`, `의료`, `선물`, `문화생활`, `기타` (was a 5-item list; still free text + suggestions, still satisfies spec §3 item 4).
@@ -990,15 +990,15 @@ Open the minimal variant's form section in `docs/superpowers/specs/design/Expens
 - Error text: `text-[12px] text-red-500` (keep the existing `role="alert"` for accessibility — the design has no equivalent, but don't drop it).
 - On successful submit, in addition to calling `onSubmitted()`, also trigger the toast (see Step 6c) with "저장했습니다" — wire this via a new optional `onSuccess: (message: string) => void` prop `ExpenseDashboard` (Step 6d) passes in, so `ExpenseForm` doesn't need to own toast state itself.
 
-- [ ] **Step 6b: Restyle `FolderPicker.tsx`'s `FolderPickerSection` to match the design**
+- [x] **Step 6b: Restyle `FolderPicker.tsx`'s `FolderPickerSection` to match the design**
 
 The design's folder section shows a static list of folder names when expanded (`folderOptions`) — that's a mock standing in for a real picker, since the design tool can't call Google APIs. **Do not port that static list.** Keep `FolderPickerSection`'s real behavior (clicking opens the actual Google Picker via `openPicker()`), but restyle its container and copy to match the design's "저장 위치" block: label `저장 위치` (`text-[11px] text-gray-400`) above the current folder name (`text-[14px] text-gray-800 font-medium`), with a `변경` button styled `text-[13px] text-indigo-600 font-semibold` that opens the picker (rename from "저장 폴더 선택"). Wrap the whole block in `px-5 py-4 border-b border-gray-100` to match the design's section rhythm.
 
-- [ ] **Step 6c: Build the `Toast` component**
+- [x] **Step 6c: Build the `Toast` component**
 
 Create `components/Toast.tsx` — a small client component: `<Toast message={string | null} />` renders nothing when `message` is `null`, otherwise renders the design's toast styling (`fixed left-1/2 bottom-6 -translate-x-1/2 bg-gray-900 text-white text-[12px] px-4 py-2 rounded-full shadow-lg`). The parent (`ExpenseDashboard`, Step 6d) owns the message state and clears it after ~1800ms (match the design's `setTimeout`), so `Toast` itself is presentational only — no timers inside it.
 
-- [ ] **Step 6d: Build `ExpenseList`, `MonthlySummary`, and the dashboard wrapper**
+- [x] **Step 6d: Build `ExpenseList`, `MonthlySummary`, and the dashboard wrapper**
 
 `components/ExpenseList.tsx`: renders the most recent expenses per the design's list rows — each row `flex items-center justify-between py-3 border-b border-gray-50`, left side stacked `{date}·{category}` (`text-[11px] text-gray-400`) above the memo (`text-[14px] text-gray-800`), right side stacked amount (`text-[15px] font-semibold text-gray-900`, formatted like `12,000원` via `amount.toLocaleString('ko-KR') + '원'`) above the payment method (`text-[11px] text-gray-400`). Date format is `MM.DD(요일)` — port the design's `dateLabel()` helper (or an equivalent) as a small local function; Korean weekday short names are `['일','월','화','수','목','금','토']`.
 
@@ -1006,12 +1006,12 @@ Create `components/Toast.tsx` — a small client component: `<Toast message={str
 
 `app/page.tsx` (server component) still can't hold the "fetch on mount, refetch after submit, show a toast" state itself, so create `components/ExpenseDashboard.tsx` — a client component that: reads `getSavedFolderId()`, fetches `GET /api/expenses?folderId=<folderId>` on mount, owns `toastMessage` state, and renders (in this order, matching the design's section stacking below the account row and `<FolderPickerSection />` — both of those stay rendered directly in `app/page.tsx`, unchanged) `<MonthlySummary total={...} />`, `<ExpenseForm onSubmitted={refetch} onSuccess={setToastMessage} />` (moved here from being rendered directly in `app/page.tsx` in Task 4 — same component, just relocated so it can trigger a refetch), `<ExpenseList expenses={...} />`, and `<Toast message={toastMessage} />`. Modify `app/page.tsx` to render `<ExpenseDashboard />` in place of the standalone `<ExpenseForm />` Task 4 put there, and restyle the top-of-screen account row (`로그인 계정` label + email + `로그아웃` button, `flex items-center justify-between px-5 pb-4 border-b border-gray-100`) and the outer page shell (`h-full w-full bg-white flex flex-col`, no more centered/max-w-md layout — this is a full mobile screen now, not a centered card) to match the design. Wire the sign-out server action's toast the same way as save-success ("로그아웃 되었습니다") if it's not too awkward given `signOut()` navigates away — use judgment; a toast that never gets seen because the page redirects immediately is fine to skip.
 
-- [ ] **Step 7: Run full test suite and build**
+- [x] **Step 7: Run full test suite and build**
 
 Run: `npm test && npm run build`
 Expected: all tests pass, build succeeds
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add -A
