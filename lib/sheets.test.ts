@@ -46,6 +46,36 @@ describe('findOrCreateSpreadsheet', () => {
   });
 });
 
+describe('findOrCreateSpreadsheet with a folderId', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('scopes the search query to the given folder', async () => {
+    (google.drive as any)().files.list.mockResolvedValue({ data: { files: [] } });
+    (google.drive as any)().files.create.mockResolvedValue({ data: { id: 'new-id' } });
+
+    await findOrCreateSpreadsheet('token', 'folder-123');
+
+    expect((google.drive as any)().files.list).toHaveBeenCalledWith(
+      expect.objectContaining({
+        q: expect.stringContaining("'folder-123' in parents"),
+      })
+    );
+  });
+
+  it('creates the spreadsheet inside the given folder', async () => {
+    (google.drive as any)().files.list.mockResolvedValue({ data: { files: [] } });
+    (google.drive as any)().files.create.mockResolvedValue({ data: { id: 'new-id' } });
+
+    await findOrCreateSpreadsheet('token', 'folder-123');
+
+    expect((google.drive as any)().files.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestBody: expect.objectContaining({ parents: ['folder-123'] }),
+      })
+    );
+  });
+});
+
 describe('appendExpenseRow', () => {
   beforeEach(() => vi.clearAllMocks());
 

@@ -17,12 +17,16 @@ function authClient(accessToken: string) {
   return auth;
 }
 
-export async function findOrCreateSpreadsheet(accessToken: string): Promise<string> {
+export async function findOrCreateSpreadsheet(
+  accessToken: string,
+  folderId?: string
+): Promise<string> {
   const auth = authClient(accessToken);
   const drive = google.drive({ version: 'v3', auth });
 
+  const folderClause = folderId ? ` and '${folderId}' in parents` : '';
   const existing = await drive.files.list({
-    q: `name='${FILE_NAME}' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`,
+    q: `name='${FILE_NAME}' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false${folderClause}`,
     fields: 'files(id, name)',
     spaces: 'drive',
   });
@@ -34,6 +38,7 @@ export async function findOrCreateSpreadsheet(accessToken: string): Promise<stri
     requestBody: {
       name: FILE_NAME,
       mimeType: 'application/vnd.google-apps.spreadsheet',
+      ...(folderId ? { parents: [folderId] } : {}),
     },
     fields: 'id',
   });
