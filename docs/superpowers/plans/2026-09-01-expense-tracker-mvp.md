@@ -886,17 +886,23 @@ git commit -m "feat: manual expense entry form and API route"
 
 ---
 
-## Task 5: Recent List + Monthly Summary
+## Task 5: Recent List + Monthly Summary + Visual Design
+
+**Design source (read this first):** the user mocked up the main screen in claude.ai/design and exported a handoff bundle. `docs/superpowers/specs/design/ExpenseScreen.dc.html` is the canonical visual reference, committed into the repo — open it and read the `<sc-if value="{{ isMinimal }}">` branch (roughly lines 14-108) plus the `Component` class at the bottom (state shape, `CATEGORIES`, `PAYMENTS`, `dateLabel()` formatting, amount formatting via `toLocaleString('ko-KR') + '원'`). That block **is** the "minimal" variant the user picked — the sibling `isCard` branch is the rejected "card" variant; ignore it. Per the handoff's own README (same directory... actually not committed, but the rule holds): recreate the visual output pixel-for-pixel using our real components and real data — don't port the mock's fake `DCLogic`/`sc-if`/`sc-for` state machinery, just its Tailwind classes, layout structure, and copy.
+
+This task both builds the still-missing list/summary pieces **and** restyles the two pieces Tasks 3b/4 already shipped (`FolderPicker`, `ExpenseForm`) to match, since the design covers the whole screen as one composition — doing it piecemeal later would mean re-touching the same files twice.
 
 **Files:**
 - Create: `lib/summary.ts`, `lib/summary.test.ts`
 - Modify: `app/api/expenses/route.ts` (add GET handler)
-- Create: `components/ExpenseList.tsx`, `components/MonthlySummary.tsx`, `components/ExpenseDashboard.tsx`
-- Modify: `app/page.tsx` (render `<ExpenseDashboard />` instead of the standalone `<ExpenseForm />` from Task 4)
+- Create: `components/ExpenseList.tsx`, `components/MonthlySummary.tsx`, `components/ExpenseDashboard.tsx`, `components/Toast.tsx`
+- Modify: `components/ExpenseForm.tsx` (restyle to match the design; see Step 6a)
+- Modify: `components/FolderPicker.tsx` (restyle `FolderPickerSection` to match; keep the real Google Picker behavior — see Step 6b)
+- Modify: `app/page.tsx` (render `<ExpenseDashboard />` instead of the standalone `<ExpenseForm />` from Task 4; restyle the sign-in/sign-out chrome)
 
 **Interfaces:**
 - Consumes: `readExpenseRows` + `ExpenseRow` from Task 3, `findOrCreateSpreadsheet` (`(accessToken, folderId?)`) from Task 3/3b, `auth()` from Task 2, `getSavedFolderId` from Task 3b, `<ExpenseForm />` from Task 4
-- Produces: `summarizeByMonth(rows: ExpenseRow[], month: string): { total: number; count: number }` from `lib/summary.ts`. GET `/api/expenses?folderId=<id>` (folderId optional) returns `{ expenses: ExpenseRow[], monthlyTotal: number }`.
+- Produces: `summarizeByMonth(rows: ExpenseRow[], month: string): { total: number; count: number }` from `lib/summary.ts`. GET `/api/expenses?folderId=<id>` (folderId optional) returns `{ expenses: ExpenseRow[], monthlyTotal: number }`. `<Toast message={string | null} />` from `components/Toast.tsx` — a fixed bottom-center pill, reused for both logout confirmation and save-success feedback.
 
 - [ ] **Step 1: Write the failing tests for the summary function**
 
@@ -974,12 +980,31 @@ export async function GET(request: Request) {
 }
 ```
 
-- [ ] **Step 6: Build `ExpenseList`, `MonthlySummary`, and a dashboard wrapper**
+- [ ] **Step 6a: Restyle `ExpenseForm.tsx` to match the design**
 
-`components/ExpenseList.tsx`: renders the most recent expenses (date, category, amount, memo) passed in as props.
-`components/MonthlySummary.tsx`: renders the monthly total passed in as a prop.
+Open the minimal variant's form section in `docs/superpowers/specs/design/ExpenseScreen.dc.html` (the `지출 입력` block) and port it:
+- Category field: expand the preset `<datalist>` options to the design's `CATEGORIES` list — `식비`, `카페`, `교통`, `쇼핑`, `구독서비스`, `의료`, `선물`, `문화생활`, `기타` (was a 5-item list; still free text + suggestions, still satisfies spec §3 item 4).
+- Payment field: **change from a free-text input to a `<select>`** with the design's fixed `PAYMENTS` options — `체크카드`, `신용카드`, `현금`, `계좌이체`. Update `lib/expense.ts`'s `ExpenseInputSchema` if needed so `method` still validates fine against these values (it's still just `z.string().min(1)`, so no schema change should be needed — just confirm).
+- Every input: swap to the design's underline style — transparent background, bottom border only, indigo focus border (`border-0 border-b border-gray-200 focus:border-indigo-500`), matching text sizes (`text-[14px]` for inputs, `text-[11px] text-gray-400` for labels).
+- Submit button: full-width, pill-shaped, indigo (`w-full bg-indigo-600 text-white rounded-full py-3 text-[14px] font-semibold active:bg-indigo-700`), label stays "저장" to match the design (rename from whatever Task 4 used).
+- Error text: `text-[12px] text-red-500` (keep the existing `role="alert"` for accessibility — the design has no equivalent, but don't drop it).
+- On successful submit, in addition to calling `onSubmitted()`, also trigger the toast (see Step 6c) with "저장했습니다" — wire this via a new optional `onSuccess: (message: string) => void` prop `ExpenseDashboard` (Step 6d) passes in, so `ExpenseForm` doesn't need to own toast state itself.
 
-`app/page.tsx` (server component) still can't hold the "fetch on mount, refetch after submit" state itself, so create `components/ExpenseDashboard.tsx` — a client component that: reads `getSavedFolderId()`, fetches `GET /api/expenses?folderId=<folderId>` on mount, renders `<MonthlySummary total={...} />`, `<ExpenseForm onSubmitted={refetch} />` (moved here from being rendered directly in `app/page.tsx` in Task 4 — same component, just relocated so it can trigger a refetch), and `<ExpenseList expenses={...} />`. Modify `app/page.tsx` to render `<ExpenseDashboard />` in place of the standalone `<ExpenseForm />` Task 4 put there.
+- [ ] **Step 6b: Restyle `FolderPicker.tsx`'s `FolderPickerSection` to match the design**
+
+The design's folder section shows a static list of folder names when expanded (`folderOptions`) — that's a mock standing in for a real picker, since the design tool can't call Google APIs. **Do not port that static list.** Keep `FolderPickerSection`'s real behavior (clicking opens the actual Google Picker via `openPicker()`), but restyle its container and copy to match the design's "저장 위치" block: label `저장 위치` (`text-[11px] text-gray-400`) above the current folder name (`text-[14px] text-gray-800 font-medium`), with a `변경` button styled `text-[13px] text-indigo-600 font-semibold` that opens the picker (rename from "저장 폴더 선택"). Wrap the whole block in `px-5 py-4 border-b border-gray-100` to match the design's section rhythm.
+
+- [ ] **Step 6c: Build the `Toast` component**
+
+Create `components/Toast.tsx` — a small client component: `<Toast message={string | null} />` renders nothing when `message` is `null`, otherwise renders the design's toast styling (`fixed left-1/2 bottom-6 -translate-x-1/2 bg-gray-900 text-white text-[12px] px-4 py-2 rounded-full shadow-lg`). The parent (`ExpenseDashboard`, Step 6d) owns the message state and clears it after ~1800ms (match the design's `setTimeout`), so `Toast` itself is presentational only — no timers inside it.
+
+- [ ] **Step 6d: Build `ExpenseList`, `MonthlySummary`, and the dashboard wrapper**
+
+`components/ExpenseList.tsx`: renders the most recent expenses per the design's list rows — each row `flex items-center justify-between py-3 border-b border-gray-50`, left side stacked `{date}·{category}` (`text-[11px] text-gray-400`) above the memo (`text-[14px] text-gray-800`), right side stacked amount (`text-[15px] font-semibold text-gray-900`, formatted like `12,000원` via `amount.toLocaleString('ko-KR') + '원'`) above the payment method (`text-[11px] text-gray-400`). Date format is `MM.DD(요일)` — port the design's `dateLabel()` helper (or an equivalent) as a small local function; Korean weekday short names are `['일','월','화','수','목','금','토']`.
+
+`components/MonthlySummary.tsx`: renders per the design's summary block — small label (`text-[12px] text-gray-400 mb-1`, e.g. "2026년 9월 총 지출") above the big total (`text-[38px] font-bold text-gray-900 tracking-tight`, same `toLocaleString('ko-KR') + '원'` formatting).
+
+`app/page.tsx` (server component) still can't hold the "fetch on mount, refetch after submit, show a toast" state itself, so create `components/ExpenseDashboard.tsx` — a client component that: reads `getSavedFolderId()`, fetches `GET /api/expenses?folderId=<folderId>` on mount, owns `toastMessage` state, and renders (in this order, matching the design's section stacking below the account row and `<FolderPickerSection />` — both of those stay rendered directly in `app/page.tsx`, unchanged) `<MonthlySummary total={...} />`, `<ExpenseForm onSubmitted={refetch} onSuccess={setToastMessage} />` (moved here from being rendered directly in `app/page.tsx` in Task 4 — same component, just relocated so it can trigger a refetch), `<ExpenseList expenses={...} />`, and `<Toast message={toastMessage} />`. Modify `app/page.tsx` to render `<ExpenseDashboard />` in place of the standalone `<ExpenseForm />` Task 4 put there, and restyle the top-of-screen account row (`로그인 계정` label + email + `로그아웃` button, `flex items-center justify-between px-5 pb-4 border-b border-gray-100`) and the outer page shell (`h-full w-full bg-white flex flex-col`, no more centered/max-w-md layout — this is a full mobile screen now, not a centered card) to match the design. Wire the sign-out server action's toast the same way as save-success ("로그아웃 되었습니다") if it's not too awkward given `signOut()` navigates away — use judgment; a toast that never gets seen because the page redirects immediately is fine to skip.
 
 - [ ] **Step 7: Run full test suite and build**
 
