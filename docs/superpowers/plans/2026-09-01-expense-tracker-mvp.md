@@ -517,7 +517,7 @@ export async function readExpenseRows(
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `npx vitest run lib/sheets.test.ts`
-Expected: PASS (6 tests)
+Expected: PASS (5 tests)
 
 - [ ] **Step 5: Commit**
 

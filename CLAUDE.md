@@ -44,6 +44,7 @@ Do not have Claude Code write application code directly under this workflow — 
 
 ## Recent decisions
 
+- 2026-09-02: Task 3 (Sheets wrapper) done — Codex completed it entirely within its own sandbox since the test is fully mocked (no network/port needed). Fixed a minor plan error (said 6 tests, actually 5) rather than padding tests to match.
 - 2026-09-02: Task 2 (Google sign-in) fully verified — Google Cloud OAuth client created, hit `access_denied` once (fix: sign-in account wasn't in the OAuth consent screen's Test users list — this is the standard cause for that error on an unverified app in Testing mode), added as test user, real browser sign-in now works end to end.
 - 2026-09-02: Task 2 code done — auth.ts + token refresh + minimal UI. Refined the sandbox-gap note: it's not just missing network, Codex also can't bind local ports, so `next build` (Turbopack) fails there specifically; `next build --webpack` works as Codex's own fallback for a code-correctness check, but Claude Code still re-verifies with the real (Turbopack) `npm run build` before committing.
 - 2026-09-01: Task 1 (scaffolding) done. Discovered Codex's sandbox has no network access — `npm install`/build verification now run from the Claude Code session, not Codex. Documented above.
