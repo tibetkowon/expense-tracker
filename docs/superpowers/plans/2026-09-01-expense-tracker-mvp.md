@@ -711,7 +711,9 @@ picker.setVisible(true);
 
 - [ ] **Step 10: Wire it into `app/page.tsx`**
 
-In the signed-in view, render `<FolderPicker accessToken={session.accessToken} apiKey={process.env.NEXT_PUBLIC_GOOGLE_API_KEY!} onPicked={(id, name) => { saveFolderId(id); setFolderId(id); }} />` above the expense form, and show the currently-saved folder name (or "Drive 루트" if none picked) next to it. `folderId` becomes page-level state, initialized from `getSavedFolderId()` on mount (client-side effect, since `localStorage` isn't available during server render), and gets passed down to whatever calls `/api/expenses` (wired in Task 4/5).
+`app/page.tsx` is a server component (`async function Home()`), so it cannot hold `useState` itself. Render a self-contained client wrapper — e.g. `<FolderPickerSection accessToken={session.accessToken} apiKey={process.env.NEXT_PUBLIC_GOOGLE_API_KEY!} />` — above the expense form, where the wrapper owns its own `folderId`/`folderName` state, initializes it from `getSavedFolderId()` (plus a persisted display name, so a refresh doesn't show a raw folder ID) in a client-side effect, and shows "Drive 루트" when nothing's been picked. Any other component that needs to know the current folder (Task 4/5's form and list) reads `getSavedFolderId()` itself the same way — it's a plain function reading `localStorage`, not something that needs to be threaded down from this wrapper.
+
+**(Already implemented as of 2026-09-02 — see `components/FolderPicker.tsx`'s `FolderPickerSection` export for the actual pattern.)**
 
 - [ ] **Step 11: Update `.env.local.example`**
 
@@ -745,11 +747,11 @@ git commit -m "feat: Drive folder picker for choosing where the sheet lives"
 - Create: `components/ExpenseForm.tsx`
 
 **Interfaces:**
-- Consumes: `auth()` from Task 2, `findOrCreateSpreadsheet` (now `(accessToken, folderId?)`) + `appendExpenseRow` + `ExpenseRow` from Task 3/3b, `getSavedFolderId` from Task 3b
+- Consumes: `auth()` from Task 2, `findOrCreateSpreadsheet` (now `(accessToken, folderId?)`) + `appendExpenseRow` + `ExpenseRow` from Task 3/3b, `getSavedFolderId` from Task 3b (`lib/folderStorage.ts`)
 - Produces:
   - `type ExpenseInput = { date: string; amount: number; category: string; memo: string; method: string }`
   - `validateExpenseInput(input: unknown): ExpenseInput` (throws `ZodError` on invalid input) from `lib/expense.ts`
-  - `<ExpenseForm onSubmitted={() => void} initialValues={Partial<ExpenseInput>} folderId={string | null} />` from `components/ExpenseForm.tsx` — Task 7 passes `initialValues` from OCR results; `folderId` comes from the page-level state Task 3b set up and is sent along with the POST body so the server knows which folder's spreadsheet to write to
+  - `<ExpenseForm onSubmitted={() => void} initialValues={Partial<ExpenseInput>} />` from `components/ExpenseForm.tsx` — Task 7 passes `initialValues` from OCR results. No `folderId` prop: `app/page.tsx` is a server component and can't hold or pass down that state (see Task 3b Step 10), so `ExpenseForm` itself calls `getSavedFolderId()` at submit time and includes it in the POST body — same "read localStorage where it's needed" pattern `FolderPickerSection` already established
 
 - [ ] **Step 1: Write the failing tests for validation**
 
@@ -864,9 +866,11 @@ export async function POST(request: Request) {
 
 - [ ] **Step 6: Build the form component**
 
-Create `components/ExpenseForm.tsx` — a client component (`'use client'`) with controlled inputs for date/amount/category/memo/method, accepting an optional `initialValues: Partial<ExpenseInput>` prop (used later by Task 7's OCR flow), a `folderId: string | null` prop, and an `onSubmitted: () => void` callback. The category field is a text input with a `<datalist>` of preset options (`식비`, `교통`, `쇼핑`, `주거`, `기타`) — this satisfies spec §3 item 4 ("기본 카테고리 + 커스텀 추가") without a separate category-management screen: presets show as suggestions, but any typed value is accepted and saved as-is. On submit, `POST` to `/api/expenses` with `fetch`, sending `{ ...formValues, folderId }` as the JSON body, show an inline error if the response is not OK, call `onSubmitted()` on success.
+Create `components/ExpenseForm.tsx` — a client component (`'use client'`) with controlled inputs for date/amount/category/memo/method, accepting an optional `initialValues: Partial<ExpenseInput>` prop (used later by Task 7's OCR flow) and an `onSubmitted: () => void` callback. The category field is a text input with a `<datalist>` of preset options (`식비`, `교통`, `쇼핑`, `주거`, `기타`) — this satisfies spec §3 item 4 ("기본 카테고리 + 커스텀 추가") without a separate category-management screen: presets show as suggestions, but any typed value is accepted and saved as-is. On submit, call `getSavedFolderId()` from `@/lib/folderStorage` and `POST` to `/api/expenses` with `fetch`, sending `{ ...formValues, folderId }` as the JSON body, show an inline error if the response is not OK, call `onSubmitted()` on success.
 
 - [ ] **Step 7: Wire the form into the signed-in view of `app/page.tsx`**
+
+(Task 5 relocates this render into a new `ExpenseDashboard` client component so it can trigger a list refetch — expected, not a regression.)
 
 - [ ] **Step 8: Run full test suite and build**
 
@@ -887,10 +891,11 @@ git commit -m "feat: manual expense entry form and API route"
 **Files:**
 - Create: `lib/summary.ts`, `lib/summary.test.ts`
 - Modify: `app/api/expenses/route.ts` (add GET handler)
-- Create: `components/ExpenseList.tsx`, `components/MonthlySummary.tsx`
+- Create: `components/ExpenseList.tsx`, `components/MonthlySummary.tsx`, `components/ExpenseDashboard.tsx`
+- Modify: `app/page.tsx` (render `<ExpenseDashboard />` instead of the standalone `<ExpenseForm />` from Task 4)
 
 **Interfaces:**
-- Consumes: `readExpenseRows` + `ExpenseRow` from Task 3, `findOrCreateSpreadsheet` (`(accessToken, folderId?)`) from Task 3/3b, `auth()` from Task 2
+- Consumes: `readExpenseRows` + `ExpenseRow` from Task 3, `findOrCreateSpreadsheet` (`(accessToken, folderId?)`) from Task 3/3b, `auth()` from Task 2, `getSavedFolderId` from Task 3b, `<ExpenseForm />` from Task 4
 - Produces: `summarizeByMonth(rows: ExpenseRow[], month: string): { total: number; count: number }` from `lib/summary.ts`. GET `/api/expenses?folderId=<id>` (folderId optional) returns `{ expenses: ExpenseRow[], monthlyTotal: number }`.
 
 - [ ] **Step 1: Write the failing tests for the summary function**
@@ -969,12 +974,12 @@ export async function GET(request: Request) {
 }
 ```
 
-- [ ] **Step 6: Build `ExpenseList` and `MonthlySummary` components**
+- [ ] **Step 6: Build `ExpenseList`, `MonthlySummary`, and a dashboard wrapper**
 
 `components/ExpenseList.tsx`: renders the most recent expenses (date, category, amount, memo) passed in as props.
 `components/MonthlySummary.tsx`: renders the monthly total passed in as a prop.
 
-Wire both into `app/page.tsx`, fetching from `GET /api/expenses?folderId=<folderId>` (from the same page-level `folderId` state Task 3b introduced) after sign-in and after `ExpenseForm`'s `onSubmitted` fires (refetch to show the new row).
+`app/page.tsx` (server component) still can't hold the "fetch on mount, refetch after submit" state itself, so create `components/ExpenseDashboard.tsx` — a client component that: reads `getSavedFolderId()`, fetches `GET /api/expenses?folderId=<folderId>` on mount, renders `<MonthlySummary total={...} />`, `<ExpenseForm onSubmitted={refetch} />` (moved here from being rendered directly in `app/page.tsx` in Task 4 — same component, just relocated so it can trigger a refetch), and `<ExpenseList expenses={...} />`. Modify `app/page.tsx` to render `<ExpenseDashboard />` in place of the standalone `<ExpenseForm />` Task 4 put there.
 
 - [ ] **Step 7: Run full test suite and build**
 
@@ -1156,10 +1161,10 @@ git commit -m "feat: receipt OCR via Gemini through AI Gateway"
 **Files:**
 - Create: `components/ReceiptUpload.tsx`
 - Modify: `components/ExpenseForm.tsx` (already accepts `initialValues` from Task 4 — no signature change needed)
-- Modify: `app/page.tsx` (wire `ReceiptUpload` → `ExpenseForm`)
+- Modify: `components/ExpenseDashboard.tsx` (wire `ReceiptUpload` → `ExpenseForm`; **not** `app/page.tsx` — that's a server component and can't hold the `draftValues` state this needs, same reasoning as Task 3b/5)
 
 **Interfaces:**
-- Consumes: `ReceiptExtraction` type and `POST /api/ocr` from Task 6; `<ExpenseForm initialValues={...} />` from Task 4
+- Consumes: `ReceiptExtraction` type and `POST /api/ocr` from Task 6; `<ExpenseForm initialValues={...} />` from Task 4; `<ExpenseDashboard />` from Task 5
 - Produces: `<ReceiptUpload onExtracted={(data: ReceiptExtraction) => void} />`
 
 - [ ] **Step 1: Write the failing component test**
@@ -1211,9 +1216,9 @@ Create `components/ReceiptUpload.tsx` — a client component with a labeled file
 Run: `npx vitest run components/ReceiptUpload.test.tsx`
 Expected: PASS
 
-- [ ] **Step 5: Wire it into the page**
+- [ ] **Step 5: Wire it into the dashboard**
 
-In `app/page.tsx`, render `<ReceiptUpload onExtracted={setDraftValues} />` above `<ExpenseForm initialValues={draftValues} ... />`, where `draftValues` is component state that starts empty and gets replaced by the OCR result. The user still has to review/submit the form — OCR only pre-fills it (per spec §3, "auto-draft, human confirms").
+In `components/ExpenseDashboard.tsx`, render `<ReceiptUpload onExtracted={setDraftValues} />` above `<ExpenseForm initialValues={draftValues} ... />`, where `draftValues` is state on `ExpenseDashboard` (which is already a client component per Task 5) that starts empty and gets replaced by the OCR result. The user still has to review/submit the form — OCR only pre-fills it (per spec §3, "auto-draft, human confirms").
 
 - [ ] **Step 6: Run full test suite and build**
 
