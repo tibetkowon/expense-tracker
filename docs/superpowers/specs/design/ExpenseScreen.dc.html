@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<script src="https://cdn.tailwindcss.com"></script>
+</helmet>
+<x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402,874">
+<sc-if value="{{ isMinimal }}" hint-placeholder-val="{{ true }}">
+<div class="h-full w-full bg-white flex flex-col overflow-y-auto" style="padding-top:54px">
+
+  <div class="flex items-center justify-between px-5 pb-4 border-b border-gray-100">
+    <div class="flex flex-col">
+      <span class="text-[11px] text-gray-400">로그인 계정</span>
+      <span class="text-[13px] text-gray-700 font-medium">{{ userEmail }}</span>
+    </div>
+    <button class="text-[13px] text-gray-400 font-medium" onClick="{{ logout }}">로그아웃</button>
+  </div>
+
+  <div class="px-5 py-4 border-b border-gray-100">
+    <div class="flex items-center justify-between">
+      <div class="flex flex-col gap-0.5">
+        <span class="text-[11px] text-gray-400">저장 위치</span>
+        <span class="text-[14px] text-gray-800 font-medium">{{ folder }}</span>
+      </div>
+      <button class="text-[13px] text-indigo-600 font-semibold" onClick="{{ toggleFolderPicker }}">변경</button>
+    </div>
+    <sc-if value="{{ showFolderPicker }}" hint-placeholder-val="{{ false }}">
+      <div class="mt-3 flex flex-col gap-1">
+        <sc-for list="{{ folderOptions }}" as="opt" hint-placeholder-count="4">
+          <button class="text-left text-[13px] text-gray-600 py-1.5" onClick="{{ opt.select }}">{{ opt.name }}</button>
+        </sc-for>
+      </div>
+    </sc-if>
+  </div>
+
+  <div class="px-5 py-7 border-b border-gray-100">
+    <div class="text-[12px] text-gray-400 mb-1">{{ monthLabel }} 총 지출</div>
+    <div class="text-[38px] font-bold text-gray-900 tracking-tight">{{ monthTotalFormatted }}</div>
+  </div>
+
+  <div class="px-5 py-6 border-b border-gray-100">
+    <div class="text-[13px] font-semibold text-gray-800 mb-4">지출 입력</div>
+    <form onSubmit="{{ addExpense }}" class="flex flex-col gap-4">
+      <div class="grid grid-cols-2 gap-4">
+        <div class="flex flex-col gap-1">
+          <label class="text-[11px] text-gray-400">날짜</label>
+          <input type="date" value="{{ form.date }}" onChange="{{ onDateChange }}" class="bg-transparent border-0 border-b border-gray-200 focus:border-indigo-500 outline-none text-[14px] py-1.5 text-gray-800"/>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-[11px] text-gray-400">금액</label>
+          <input type="number" placeholder="0" value="{{ form.amount }}" onChange="{{ onAmountChange }}" class="bg-transparent border-0 border-b border-gray-200 focus:border-indigo-500 outline-none text-[14px] py-1.5 text-gray-800"/>
+        </div>
+      </div>
+      <div class="flex flex-col gap-1">
+        <label class="text-[11px] text-gray-400">카테고리</label>
+        <input type="text" list="cat-list-min" placeholder="예: 식비" value="{{ form.category }}" onChange="{{ onCategoryChange }}" class="bg-transparent border-0 border-b border-gray-200 focus:border-indigo-500 outline-none text-[14px] py-1.5 text-gray-800"/>
+        <datalist id="cat-list-min">
+          <sc-for list="{{ categories }}" as="c" hint-placeholder-count="8">
+            <option value="{{ c }}"></option>
+          </sc-for>
+        </datalist>
+      </div>
+      <div class="flex flex-col gap-1">
+        <label class="text-[11px] text-gray-400">메모</label>
+        <input type="text" placeholder="예: 스타벅스 아메리카노" value="{{ form.memo }}" onChange="{{ onMemoChange }}" class="bg-transparent border-0 border-b border-gray-200 focus:border-indigo-500 outline-none text-[14px] py-1.5 text-gray-800"/>
+      </div>
+      <div class="flex flex-col gap-1">
+        <label class="text-[11px] text-gray-400">결제수단</label>
+        <select value="{{ form.payment }}" onChange="{{ onPaymentChange }}" class="bg-transparent border-0 border-b border-gray-200 focus:border-indigo-500 outline-none text-[14px] py-1.5 text-gray-800">
+          <sc-for list="{{ payments }}" as="p" hint-placeholder-count="4">
+            <option value="{{ p }}">{{ p }}</option>
+          </sc-for>
+        </select>
+      </div>
+      <sc-if value="{{ formError }}" hint-placeholder-val="{{ false }}">
+        <div class="text-[12px] text-red-500">{{ formError }}</div>
+      </sc-if>
+      <button type="submit" class="mt-1 w-full bg-indigo-600 text-white rounded-full py-3 text-[14px] font-semibold active:bg-indigo-700">저장</button>
+    </form>
+  </div>
+
+  <div class="px-5 py-6 pb-10">
+    <div class="text-[13px] font-semibold text-gray-800 mb-1">최근 내역</div>
+    <sc-for list="{{ expenses }}" as="item" hint-placeholder-count="6">
+      <div class="flex items-center justify-between py-3 border-b border-gray-50">
+        <div class="flex flex-col">
+          <span class="text-[11px] text-gray-400">{{ item.dateLabel }} · {{ item.category }}</span>
+          <span class="text-[14px] text-gray-800">{{ item.memo }}</span>
+        </div>
+        <div class="flex flex-col items-end">
+          <span class="text-[15px] font-semibold text-gray-900">{{ item.amountLabel }}</span>
+          <span class="text-[11px] text-gray-400">{{ item.payment }}</span>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+    <div class="fixed left-1/2 bottom-6 -translate-x-1/2 bg-gray-900 text-white text-[12px] px-4 py-2 rounded-full shadow-lg">{{ toast }}</div>
+  </sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ isCard }}" hint-placeholder-val="{{ false }}">
+<div class="h-full w-full bg-slate-100 flex flex-col gap-3 overflow-y-auto px-4" style="padding-top:54px;padding-bottom:20px">
+
+  <div class="flex items-center justify-between px-1 py-1">
+    <div class="flex flex-col">
+      <span class="text-[10px] text-gray-400">로그인 계정</span>
+      <span class="text-[13px] text-gray-700 font-medium">{{ userEmail }}</span>
+    </div>
+    <button class="text-[12px] text-gray-500 font-medium bg-white border border-slate-200 rounded-full px-3 py-1.5 shadow-sm" onClick="{{ logout }}">로그아웃</button>
+  </div>
+
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm px-4 py-3">
+    <div class="flex items-center justify-between">
+      <div class="flex flex-col gap-0.5">
+        <span class="text-[11px] text-gray-400">저장 위치</span>
+        <span class="text-[14px] text-gray-800 font-semibold">{{ folder }}</span>
+      </div>
+      <button class="text-[12px] text-indigo-600 font-semibold bg-indigo-50 rounded-full px-3 py-1.5" onClick="{{ toggleFolderPicker }}">변경</button>
+    </div>
+    <sc-if value="{{ showFolderPicker }}" hint-placeholder-val="{{ false }}">
+      <div class="mt-3 pt-3 border-t border-slate-100 flex flex-col gap-1">
+        <sc-for list="{{ folderOptions }}" as="opt" hint-placeholder-count="4">
+          <button class="text-left text-[13px] text-gray-600 py-1.5" onClick="{{ opt.select }}">{{ opt.name }}</button>
+        </sc-for>
+      </div>
+    </sc-if>
+  </div>
+
+  <div class="bg-indigo-600 rounded-2xl px-5 py-6 shadow-sm">
+    <div class="text-[12px] text-indigo-100 mb-1">{{ monthLabel }} 총 지출</div>
+    <div class="text-[36px] font-bold text-white tracking-tight">{{ monthTotalFormatted }}</div>
+  </div>
+
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm px-4 py-5">
+    <div class="text-[13px] font-semibold text-gray-800 mb-4">지출 입력</div>
+    <form onSubmit="{{ addExpense }}" class="flex flex-col gap-3">
+      <div class="grid grid-cols-2 gap-3">
+        <div class="flex flex-col gap-1">
+          <label class="text-[11px] text-gray-400">날짜</label>
+          <input type="date" value="{{ form.date }}" onChange="{{ onDateChange }}" class="bg-slate-50 rounded-xl border border-slate-200 px-3 py-2.5 text-[13px] text-gray-800 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-[11px] text-gray-400">금액</label>
+          <input type="number" placeholder="0" value="{{ form.amount }}" onChange="{{ onAmountChange }}" class="bg-slate-50 rounded-xl border border-slate-200 px-3 py-2.5 text-[13px] text-gray-800 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
+        </div>
+      </div>
+      <div class="flex flex-col gap-1">
+        <label class="text-[11px] text-gray-400">카테고리</label>
+        <input type="text" list="cat-list-card" placeholder="예: 식비" value="{{ form.category }}" onChange="{{ onCategoryChange }}" class="bg-slate-50 rounded-xl border border-slate-200 px-3 py-2.5 text-[13px] text-gray-800 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 w-full"/>
+        <datalist id="cat-list-card">
+          <sc-for list="{{ categories }}" as="c" hint-placeholder-count="8">
+            <option value="{{ c }}"></option>
+          </sc-for>
+        </datalist>
+      </div>
+      <div class="flex flex-col gap-1">
+        <label class="text-[11px] text-gray-400">메모</label>
+        <input type="text" placeholder="예: 스타벅스 아메리카노" value="{{ form.memo }}" onChange="{{ onMemoChange }}" class="bg-slate-50 rounded-xl border border-slate-200 px-3 py-2.5 text-[13px] text-gray-800 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 w-full"/>
+      </div>
+      <div class="flex flex-col gap-1">
+        <label class="text-[11px] text-gray-400">결제수단</label>
+        <select value="{{ form.payment }}" onChange="{{ onPaymentChange }}" class="bg-slate-50 rounded-xl border border-slate-200 px-3 py-2.5 text-[13px] text-gray-800 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 w-full">
+          <sc-for list="{{ payments }}" as="p" hint-placeholder-count="4">
+            <option value="{{ p }}">{{ p }}</option>
+          </sc-for>
+        </select>
+      </div>
+      <sc-if value="{{ formError }}" hint-placeholder-val="{{ false }}">
+        <div class="text-[12px] text-red-500">{{ formError }}</div>
+      </sc-if>
+      <button type="submit" class="mt-1 w-full bg-indigo-600 text-white rounded-xl py-3 text-[14px] font-semibold shadow-sm active:bg-indigo-700">저장</button>
+    </form>
+  </div>
+
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm px-4 py-1 divide-y divide-slate-100 mb-4">
+    <div class="text-[13px] font-semibold text-gray-800 pt-3 pb-1">최근 내역</div>
+    <sc-for list="{{ expenses }}" as="item" hint-placeholder-count="6">
+      <div class="flex items-center gap-3 py-3">
+        <div class="w-9 h-9 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-[13px] font-semibold flex-shrink-0">{{ item.initial }}</div>
+        <div class="flex-1 flex flex-col min-w-0">
+          <span class="text-[14px] text-gray-800 font-medium truncate">{{ item.memo }}</span>
+          <span class="text-[11px] text-gray-400">{{ item.dateLabel }} · {{ item.category }} · {{ item.payment }}</span>
+        </div>
+        <span class="text-[14px] font-semibold text-gray-900 whitespace-nowrap">{{ item.amountLabel }}</span>
+      </div>
+    </sc-for>
+  </div>
+
+  <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+    <div class="fixed left-1/2 bottom-6 -translate-x-1/2 bg-gray-900 text-white text-[12px] px-4 py-2 rounded-full shadow-lg">{{ toast }}</div>
+  </sc-if>
+</div>
+</sc-if>
+</x-import>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:420,&quot;height&quot;:900},&quot;variant&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;minimal&quot;,&quot;options&quot;:[&quot;minimal&quot;,&quot;card&quot;],&quot;tsType&quot;:&quot;'minimal'|'card'&quot;}}">
+const CATEGORIES = ['식비', '카페', '교통', '쇼핑', '구독서비스', '의료', '선물', '문화생활', '기타'];
+const PAYMENTS = ['체크카드', '신용카드', '현금', '계좌이체'];
+const WEEKDAY = ['일', '월', '화', '수', '목', '금', '토'];
+const CURRENT_MONTH_PREFIX = '2026-09';
+
+const INITIAL_EXPENSES = [
+  { date: '2026-09-02', category: '카페', memo: '스타벅스 아메리카노', amount: 5700, payment: '체크카드' },
+  { date: '2026-09-02', category: '교통', memo: '지하철/버스', amount: 3200, payment: '체크카드' },
+  { date: '2026-09-01', category: '식비', memo: '이마트 장보기', amount: 47300, payment: '신용카드' },
+  { date: '2026-09-01', category: '구독서비스', memo: '넷플릭스 구독', amount: 17000, payment: '신용카드' },
+  { date: '2026-08-31', category: '의료', memo: '병원 진료비', amount: 12000, payment: '현금' },
+  { date: '2026-08-29', category: '선물', memo: '친구 생일선물', amount: 35000, payment: '신용카드' },
+];
+
+function dateLabel(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${mm}.${dd}(${WEEKDAY[d.getDay()]})`;
+}
+
+class Component extends DCLogic {
+  state = {
+    expenses: INITIAL_EXPENSES,
+    folder: 'Drive 루트',
+    showFolderPicker: false,
+    form: { date: '2026-09-02', amount: '', category: '', memo: '', payment: '체크카드' },
+    formError: '',
+    toast: '',
+  };
+
+  toggleFolderPicker = () => this.setState(s => ({ showFolderPicker: !s.showFolderPicker }));
+
+  selectFolder = (name) => this.setState({ folder: name, showFolderPicker: false });
+
+  onDateChange = (e) => this.setState(s => ({ form: { ...s.form, date: e.target.value } }));
+  onAmountChange = (e) => this.setState(s => ({ form: { ...s.form, amount: e.target.value } }));
+  onCategoryChange = (e) => this.setState(s => ({ form: { ...s.form, category: e.target.value } }));
+  onMemoChange = (e) => this.setState(s => ({ form: { ...s.form, memo: e.target.value } }));
+  onPaymentChange = (e) => this.setState(s => ({ form: { ...s.form, payment: e.target.value } }));
+
+  addExpense = (e) => {
+    e.preventDefault();
+    const f = this.state.form;
+    if (!f.date || !f.amount || Number(f.amount) <= 0 || !f.category.trim()) {
+      this.setState({ formError: '날짜, 금액, 카테고리를 확인해주세요.' });
+      return;
+    }
+    const newItem = { date: f.date, category: f.category.trim(), memo: f.memo.trim() || '(메모 없음)', amount: Number(f.amount), payment: f.payment };
+    this.setState(s => ({
+      expenses: [newItem, ...s.expenses],
+      form: { date: f.date, amount: '', category: '', memo: '', payment: f.payment },
+      formError: '',
+    }));
+  };
+
+  logout = () => {
+    this.setState({ toast: '로그아웃 되었습니다 (프로토타입)' });
+    clearTimeout(this._toastTimer);
+    this._toastTimer = setTimeout(() => this.setState({ toast: '' }), 1800);
+  };
+
+  renderVals() {
+    const variant = this.props.variant ?? 'minimal';
+    const monthTotal = this.state.expenses
+      .filter(x => x.date.startsWith(CURRENT_MONTH_PREFIX))
+      .reduce((sum, x) => sum + x.amount, 0);
+
+    return {
+      isMinimal: variant === 'minimal',
+      isCard: variant === 'card',
+      userEmail: 'jiwon.kim92@gmail.com',
+      folder: this.state.folder,
+      showFolderPicker: this.state.showFolderPicker,
+      folderOptions: ['Drive 루트', '가계부/2026', '개인/지출관리', '업무 무관/생활비'].map(name => ({
+        name, select: () => this.selectFolder(name),
+      })),
+      monthLabel: '2026년 9월',
+      monthTotalFormatted: monthTotal.toLocaleString('ko-KR') + '원',
+      form: this.state.form,
+      formError: this.state.formError,
+      categories: CATEGORIES,
+      payments: PAYMENTS,
+      onDateChange: this.onDateChange,
+      onAmountChange: this.onAmountChange,
+      onCategoryChange: this.onCategoryChange,
+      onMemoChange: this.onMemoChange,
+      onPaymentChange: this.onPaymentChange,
+      addExpense: this.addExpense,
+      toggleFolderPicker: this.toggleFolderPicker,
+      logout: this.logout,
+      toast: this.state.toast,
+      expenses: this.state.expenses.map(x => ({
+        ...x,
+        dateLabel: dateLabel(x.date),
+        amountLabel: x.amount.toLocaleString('ko-KR') + '원',
+        initial: x.category.slice(0, 1),
+      })),
+    };
+  }
+}
+</script>
+</body>
+</html>
