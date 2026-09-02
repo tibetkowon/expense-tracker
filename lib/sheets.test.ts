@@ -8,6 +8,7 @@ vi.mock('googleapis', () => {
     create: vi.fn(),
   };
   const spreadsheets = {
+    batchUpdate: vi.fn(),
     values: {
       append: vi.fn(),
       get: vi.fn(),
@@ -35,6 +36,7 @@ describe('findOrCreateSpreadsheet', () => {
     const id = await findOrCreateSpreadsheet('token');
     expect(id).toBe('existing-id');
     expect((google.drive as any)().files.create).not.toHaveBeenCalled();
+    expect((google.sheets as any)().spreadsheets.batchUpdate).not.toHaveBeenCalled();
   });
 
   it('creates a new spreadsheet when none is found', async () => {
@@ -43,6 +45,19 @@ describe('findOrCreateSpreadsheet', () => {
 
     const id = await findOrCreateSpreadsheet('token');
     expect(id).toBe('new-id');
+    expect((google.sheets as any)().spreadsheets.batchUpdate).toHaveBeenCalledWith({
+      spreadsheetId: 'new-id',
+      requestBody: {
+        requests: [
+          {
+            updateSheetProperties: {
+              properties: { sheetId: 0, title: 'Sheet1' },
+              fields: 'title',
+            },
+          },
+        ],
+      },
+    });
   });
 });
 

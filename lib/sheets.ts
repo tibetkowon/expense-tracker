@@ -44,6 +44,22 @@ export async function findOrCreateSpreadsheet(
   });
 
   if (!created.data.id) throw new Error('Failed to create spreadsheet');
+
+  const sheets = google.sheets({ version: 'v4', auth });
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: created.data.id,
+    requestBody: {
+      requests: [
+        {
+          updateSheetProperties: {
+            properties: { sheetId: 0, title: 'Sheet1' },
+            fields: 'title',
+          },
+        },
+      ],
+    },
+  });
+
   return created.data.id;
 }
 
