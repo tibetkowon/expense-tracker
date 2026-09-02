@@ -44,6 +44,17 @@ Do not have Claude Code write application code directly under this workflow — 
 
 ## Recent decisions
 
-- 2026-09-02: Task 2 (Google sign-in) done — auth.ts + token refresh + minimal UI. Refined the sandbox-gap note: it's not just missing network, Codex also can't bind local ports, so `next build` (Turbopack) fails there specifically; `next build --webpack` works as Codex's own fallback for a code-correctness check, but Claude Code still re-verifies with the real (Turbopack) `npm run build` before committing. Google Cloud OAuth client setup + real browser sign-in test still pending on the user.
+- 2026-09-02: Task 2 (Google sign-in) fully verified — Google Cloud OAuth client created, hit `access_denied` once (fix: sign-in account wasn't in the OAuth consent screen's Test users list — this is the standard cause for that error on an unverified app in Testing mode), added as test user, real browser sign-in now works end to end.
+- 2026-09-02: Task 2 code done — auth.ts + token refresh + minimal UI. Refined the sandbox-gap note: it's not just missing network, Codex also can't bind local ports, so `next build` (Turbopack) fails there specifically; `next build --webpack` works as Codex's own fallback for a code-correctness check, but Claude Code still re-verifies with the real (Turbopack) `npm run build` before committing.
 - 2026-09-01: Task 1 (scaffolding) done. Discovered Codex's sandbox has no network access — `npm install`/build verification now run from the Claude Code session, not Codex. Documented above.
 - 2026-09-01: Design spec and MVP implementation plan written and approved.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
