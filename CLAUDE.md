@@ -35,6 +35,11 @@ Do not have Claude Code write application code directly under this workflow — 
 - Keep a **Recent decisions** log below, newest first. Prune entries once they're fully superseded by the spec/plan docs rather than letting this section grow unbounded.
 - Full research history (what was tried and rejected, and why) lives in the spec, not here — link to it rather than duplicating it.
 
+## Architecture notes
+
+- `app/page.tsx` is an async server component — it cannot hold `useState` or event handlers. Any UI that needs client state (folder picker, expense form, list refetch, OCR draft values) lives in a dedicated client component (`'use client'`) that owns its own state, e.g. `FolderPickerSection`, `ExpenseDashboard`. Don't try to lift state into `page.tsx` itself.
+- No shared "app state" object — components that need to know things like the picked Drive folder just read it themselves (e.g. `getSavedFolderId()` from `lib/folderStorage.ts`, which wraps `localStorage`) rather than receiving it threaded down through props from a common ancestor.
+
 ## Constraints (do not relax without updating the spec)
 
 - No database. Sheets is the store.
@@ -44,10 +49,10 @@ Do not have Claude Code write application code directly under this workflow — 
 
 ## Recent decisions
 
-- 2026-09-02: Task 3 (Sheets wrapper) done — Codex completed it entirely within its own sandbox since the test is fully mocked (no network/port needed). Fixed a minor plan error (said 6 tests, actually 5) rather than padding tests to match.
-- 2026-09-02: Task 2 (Google sign-in) fully verified — Google Cloud OAuth client created, hit `access_denied` once (fix: sign-in account wasn't in the OAuth consent screen's Test users list — this is the standard cause for that error on an unverified app in Testing mode), added as test user, real browser sign-in now works end to end.
-- 2026-09-02: Task 2 code done — auth.ts + token refresh + minimal UI. Refined the sandbox-gap note: it's not just missing network, Codex also can't bind local ports, so `next build` (Turbopack) fails there specifically; `next build --webpack` works as Codex's own fallback for a code-correctness check, but Claude Code still re-verifies with the real (Turbopack) `npm run build` before committing.
-- 2026-09-01: Task 1 (scaffolding) done. Discovered Codex's sandbox has no network access — `npm install`/build verification now run from the Claude Code session, not Codex. Documented above.
+- 2026-09-02: Added Task 3b (Drive folder picker, spec §3 item 6) mid-build at user request — Google Picker lets the user choose a Drive folder for the sheet, id+name persisted to localStorage (no DB). Revealed `app/page.tsx`'s server-component state limitation (see Architecture notes above); fixed forward in Task 4/5/7's plan text before they were built, so no rework was needed.
+- 2026-09-02: Task 3 (Sheets wrapper) done — Codex completed it entirely within its own sandbox since the test is fully mocked (no network/port needed).
+- 2026-09-02: Task 2 fully verified end to end (real Google sign-in works). Sandbox gap note refined: Codex can't bind local ports either, not just missing network — `next build` (Turbopack) fails there, `next build --webpack` is Codex's own fallback for a code-correctness check, Claude Code still re-verifies with the real build before committing.
+- 2026-09-01: Task 1 (scaffolding) done. Discovered Codex's sandbox has no network access — install/build verification run from the Claude Code session, not Codex.
 - 2026-09-01: Design spec and MVP implementation plan written and approved.
 
 <!-- BEGIN:nextjs-agent-rules -->
