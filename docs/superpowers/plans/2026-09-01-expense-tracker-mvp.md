@@ -1022,14 +1022,18 @@ git commit -m "feat: recent expense list and monthly summary"
 
 ## Task 6: Receipt OCR via Gemini (AI Gateway)
 
-**Before writing this task's code, the implementing agent MUST re-verify it** — `ai` will be installed and `node_modules/ai/docs/` will exist by this point, which was not true when this plan was written. Run:
+**Re-verified 2026-09-03 against the installed `ai@7.0.87` package** (`node_modules/ai/docs/`) and the live AI Gateway model list. Two things drifted since this plan was written and the snippets below have already been corrected for it — implement as written, no further live-doc verification needed:
+
+1. **`generateObject` is deprecated** (`node_modules/ai/docs/08-migration-guides/24-migration-guide-6-0.mdx` line 152) in favor of `generateText` with an `output: Output.object({ schema })` option. `{ object }` becomes `{ output }` on the result.
+2. **The `{ type: 'image', image }` message content part is deprecated** (`node_modules/ai/docs/08-migration-guides/23-migration-guide-7-0.mdx` line 1413) in favor of `{ type: 'file', mediaType, data }`. `data` accepts a bare base64 string directly (no data-URL prefix needed) — confirmed via `node_modules/ai/docs/07-reference/01-ai-sdk-core/30-model-message.mdx`'s `FilePart`/`FileData` reference (`data: FileData | DataContent | URL | ProviderReference`, where the bare `DataContent` base64-string shorthand is supported alongside the tagged `{ type: 'data', data }` form).
+3. The top vision-capable Flash-Lite model on the Gateway is still `google/gemini-3.5-flash-lite` (confirmed live 2026-09-03 — newer `3.6/3.7/3.8-flash` exist but have no `-flash-lite` variant beyond `3.5`).
+
+If dependency versions have moved on further by the time this is implemented, re-run the same greps as a sanity check before trusting the snippets blindly:
 
 ```bash
-grep -rl "generateObject" node_modules/ai/docs/ | head -5
-curl -s https://ai-gateway.vercel.sh/v1/models | jq -r '[.data[] | select(.id | startswith("google/")) | .id] | reverse | .[]' | head -10
+grep -n "generateObject" node_modules/ai/docs/08-migration-guides/24-migration-guide-6-0.mdx | head -5
+curl -s https://ai-gateway.vercel.sh/v1/models | jq -r '[.data[] | select(.id | startswith("google/")) | .id] | sort'
 ```
-
-Confirm `generateObject`'s signature (schema/messages/image-content shape) and the current best Gemini Flash-Lite model ID still match what's below — adjust if the library or model list has moved on. As of 2026-09-01, the top vision-capable Flash-Lite model was `google/gemini-3.5-flash-lite`.
 
 **Files:**
 - Create: `lib/ocr.ts`, `lib/ocr.test.ts`
@@ -1042,23 +1046,24 @@ Confirm `generateObject`'s signature (schema/messages/image-content shape) and t
   - `extractReceiptData(imageBase64: string): Promise<ReceiptExtraction>` from `lib/ocr.ts`
   - POST `/api/ocr` accepting `{ imageBase64: string }`, returning `ReceiptExtraction`
 
-- [ ] **Step 1: Write the failing test with a mocked `generateObject`**
+- [x] **Step 1: Write the failing test with a mocked `generateText`/`Output.object`**
 
 Create `lib/ocr.test.ts`:
 
 ```ts
 import { describe, it, expect, vi } from 'vitest';
-import { generateObject } from 'ai';
+import { generateText } from 'ai';
 import { extractReceiptData } from './ocr';
 
 vi.mock('ai', () => ({
-  generateObject: vi.fn(),
+  generateText: vi.fn(),
+  Output: { object: vi.fn((config) => config) },
 }));
 
 describe('extractReceiptData', () => {
   it('returns the structured fields from the model response', async () => {
-    (generateObject as any).mockResolvedValue({
-      object: { date: '2026-09-01', amount: 8500, merchant: '스타벅스', categoryGuess: '카페' },
+    (generateText as any).mockResolvedValue({
+      output: { date: '2026-09-01', amount: 8500, merchant: '스타벅스', categoryGuess: '카페' },
     });
 
     const result = await extractReceiptData('base64-image-data');
@@ -1072,8 +1077,8 @@ describe('extractReceiptData', () => {
   });
 
   it('propagates nulls when the model cannot read a field', async () => {
-    (generateObject as any).mockResolvedValue({
-      object: { date: null, amount: null, merchant: null, categoryGuess: null },
+    (generateText as any).mockResolvedValue({
+      output: { date: null, amount: null, merchant: null, categoryGuess: null },
     });
 
     const result = await extractReceiptData('base64-image-data');
@@ -1082,17 +1087,17 @@ describe('extractReceiptData', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run lib/ocr.test.ts`
 Expected: FAIL — `lib/ocr.ts` does not exist yet
 
-- [ ] **Step 3: Implement the extractor**
+- [x] **Step 3: Implement the extractor**
 
-Create `lib/ocr.ts` (verify the exact `generateObject` call shape against `node_modules/ai/docs/` per the note above before finalizing — this is the pattern as of 2026-09-01):
+Create `lib/ocr.ts` (this is the corrected pattern for `ai@7.0.87` — `generateObject` and the `image` content part are both deprecated in this version; see the re-verification note above the task heading):
 
 ```ts
-import { generateObject } from 'ai';
+import { generateText, Output } from 'ai';
 import { z } from 'zod';
 
 const ReceiptSchema = z.object({
@@ -1108,9 +1113,9 @@ const ReceiptSchema = z.object({
 export type ReceiptExtraction = z.infer<typeof ReceiptSchema>;
 
 export async function extractReceiptData(imageBase64: string): Promise<ReceiptExtraction> {
-  const { object } = await generateObject({
+  const { output } = await generateText({
     model: 'google/gemini-3.5-flash-lite',
-    schema: ReceiptSchema,
+    output: Output.object({ schema: ReceiptSchema }),
     messages: [
       {
         role: 'user',
@@ -1119,22 +1124,22 @@ export async function extractReceiptData(imageBase64: string): Promise<ReceiptEx
             type: 'text',
             text: 'Extract the transaction date, total amount, merchant name, and a best-guess Korean spending category from this receipt photo. Use null for any field you cannot read confidently.',
           },
-          { type: 'image', image: `data:image/jpeg;base64,${imageBase64}` },
+          { type: 'file', mediaType: 'image/jpeg', data: imageBase64 },
         ],
       },
     ],
   });
 
-  return object;
+  return output;
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run lib/ocr.test.ts`
 Expected: PASS (2 tests)
 
-- [ ] **Step 5: Implement the route**
+- [x] **Step 5: Implement the route**
 
 Create `app/api/ocr/route.ts`:
 
@@ -1163,7 +1168,7 @@ export async function POST(request: Request) {
 
 Get a key from the Vercel dashboard's AI Gateway API Keys page and add it to `.env.local` (already documented in `.env.local.example` from Task 1).
 
-- [ ] **Step 7: Run full test suite and build**
+- [x] **Step 7: Run full test suite and build**
 
 Run: `npm test && npm run build`
 Expected: all tests pass, build succeeds
