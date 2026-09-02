@@ -27,7 +27,7 @@ This project is built with Claude Code supervising and Codex doing the actual im
 
 Do not have Claude Code write application code directly under this workflow — that's Codex's job. Claude Code writes/updates specs, plans, and this file.
 
-**Known environment gap:** Codex's sandbox has no network access, so it cannot run `npm install`, hit the AI Gateway, or reach any external API — only the supervising Claude Code session can. For any task step that needs network (installing deps, live API verification), Claude Code runs that step itself after Codex writes the code, then reports results back into the loop. Don't send Codex back to retry a network call — it will hit the same wall every time.
+**Known environment gap:** Codex's sandbox has no network access and can't bind local ports — it cannot run `npm install`, hit the AI Gateway, reach any external API, or run `next build`/`next dev` with Turbopack (Turbopack binds a local port even for a one-shot build; fails with `Operation not permitted`). Codex can fall back to `next build --webpack` to type-check/compile without hitting that wall. For anything that genuinely needs network or a bound port, the supervising Claude Code session runs it after Codex writes the code, then reports results back into the loop. Don't send Codex back to retry a network or Turbopack build — it will hit the same wall every time.
 
 ## Project memory
 
@@ -44,5 +44,6 @@ Do not have Claude Code write application code directly under this workflow — 
 
 ## Recent decisions
 
+- 2026-09-02: Task 2 (Google sign-in) done — auth.ts + token refresh + minimal UI. Refined the sandbox-gap note: it's not just missing network, Codex also can't bind local ports, so `next build` (Turbopack) fails there specifically; `next build --webpack` works as Codex's own fallback for a code-correctness check, but Claude Code still re-verifies with the real (Turbopack) `npm run build` before committing. Google Cloud OAuth client setup + real browser sign-in test still pending on the user.
 - 2026-09-01: Task 1 (scaffolding) done. Discovered Codex's sandbox has no network access — `npm install`/build verification now run from the Claude Code session, not Codex. Documented above.
 - 2026-09-01: Design spec and MVP implementation plan written and approved.
