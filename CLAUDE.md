@@ -49,6 +49,7 @@ Do not have Claude Code write application code directly under this workflow — 
 
 ## Recent decisions
 
+- 2026-09-02: Task 4 (manual entry) done — form + POST /api/expenses, ExpenseForm reads getSavedFolderId() itself (per the Architecture notes pattern). page.tsx's onSubmitted wiring is a harmless empty-server-action stub until Task 5's ExpenseDashboard replaces it.
 - 2026-09-02: Task 3b fully verified — user confirmed folder picker works end to end in the browser after enabling Drive/Sheets/Picker APIs and adding a Picker-restricted API key. Added Task 3b (Drive folder picker, spec §3 item 6) mid-build at user request — Google Picker lets the user choose a Drive folder for the sheet, id+name persisted to localStorage (no DB). Revealed `app/page.tsx`'s server-component state limitation (see Architecture notes above); fixed forward in Task 4/5/7's plan text before they were built, so no rework was needed.
 - 2026-09-02: Task 3 (Sheets wrapper) done — Codex completed it entirely within its own sandbox since the test is fully mocked (no network/port needed).
 - 2026-09-02: Task 2 fully verified end to end (real Google sign-in works). Sandbox gap note refined: Codex can't bind local ports either, not just missing network — `next build` (Turbopack) fails there, `next build --webpack` is Codex's own fallback for a code-correctness check, Claude Code still re-verifies with the real build before committing.
