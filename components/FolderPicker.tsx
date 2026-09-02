@@ -58,8 +58,13 @@ export default function FolderPicker({ accessToken, apiKey, onPicked }: FolderPi
   };
 
   return (
-    <button type="button" disabled={!ready} onClick={openPicker}>
-      저장 폴더 선택
+    <button
+      type="button"
+      disabled={!ready}
+      onClick={openPicker}
+      className="text-[13px] font-semibold text-indigo-600 disabled:text-gray-300"
+    >
+      변경
     </button>
   );
 }
@@ -74,18 +79,25 @@ export function FolderPickerSection({ accessToken, apiKey }: Omit<FolderPickerPr
   }, []);
 
   return (
-    <div className="flex flex-col items-center gap-2">
-      <FolderPicker
-        accessToken={accessToken}
-        apiKey={apiKey}
-        onPicked={(id, name) => {
-          saveFolderId(id);
-          window.localStorage.setItem(FOLDER_NAME_STORAGE_KEY, name);
-          setFolderId(id);
-          setFolderName(name);
-        }}
-      />
-      <p>{folderName ?? (folderId ? `저장된 Drive 폴더 (${folderId})` : 'Drive 루트')}</p>
+    <div className="border-b border-gray-100 px-5 py-4">
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[11px] text-gray-400">저장 위치</span>
+          <span className="text-[14px] font-medium text-gray-800">
+            {folderName ?? (folderId ? `저장된 Drive 폴더 (${folderId})` : 'Drive 루트')}
+          </span>
+        </div>
+        <FolderPicker
+          accessToken={accessToken}
+          apiKey={apiKey}
+          onPicked={(id, name) => {
+            saveFolderId(id);
+            window.localStorage.setItem(FOLDER_NAME_STORAGE_KEY, name);
+            setFolderId(id);
+            setFolderName(name);
+          }}
+        />
+      </div>
     </div>
   );
 }
