@@ -1,5 +1,6 @@
 import { auth, signIn, signOut } from '@/auth';
 import { FolderPickerSection } from '@/components/FolderPicker';
+import ExpenseForm from '@/components/ExpenseForm';
 
 export default async function Home() {
   const session = await auth();
@@ -13,6 +14,11 @@ export default async function Home() {
           <FolderPickerSection
             accessToken={session.accessToken!}
             apiKey={process.env.NEXT_PUBLIC_GOOGLE_API_KEY!}
+          />
+          <ExpenseForm
+            onSubmitted={async () => {
+              'use server';
+            }}
           />
           <form
             action={async () => {
