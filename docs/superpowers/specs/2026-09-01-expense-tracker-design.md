@@ -31,6 +31,7 @@
 3. Google Sheets 자동 저장 (지정 스프레드시트에 행 추가)
 4. 카테고리 관리 — 기본 카테고리 + 커스텀 추가
 5. 최근 내역 조회 및 월별 합계
+6. 시트 저장 폴더 지정 — Google Picker로 본인 Drive의 기존 폴더를 선택. 선택한 폴더 ID는 서버 DB 없이 브라우저 localStorage에 저장(단일 기기 개인용 앱 전제). 미선택 시 Drive 루트에 생성/검색(기존 동작 유지)
 
 ### 2단계 확장 후보 (MVP 이후, 아직 미착수)
 - 이메일 결제알림 자동 파싱 (Gmail API)
@@ -48,6 +49,9 @@
 | 인증 | Google Sign-In (클라이언트), `drive.file` 스코프 | 개인 단일 사용자용. `drive.file`은 앱이 생성한 파일만 접근하는 최소 권한이라 광범위한 Drive 접근 승인 없이 사용 가능. 서버에 OAuth 토큰을 영구 저장할 필요 없음(자동 수집을 보류했으므로 상시 서버 접근 불필요) |
 | 저장소 | Google Sheets API만 사용, 별도 DB 없음 | 개인 가계부 규모에서 DB 추가는 과설계. Sheets 자체가 "구글 드라이브에 정리"라는 요구사항과 정확히 일치 |
 | OCR | Gemini API (Vision), Flash/Flash-Lite 모델 | 순수 OCR이 아니라 이미지→구조화 JSON(날짜/금액/상호명) 추출까지 한 번에 처리. 무료 티어(하루 최대 1,000회)로 개인 사용량 충분. 유료 전환되어도 영수증 1장당 약 0.1~0.4원 수준으로 사실상 무시 가능 |
+| 폴더 선택 | Google Picker API | 사용자가 Drive에서 기존 폴더를 직접 골라 그 안에 시트를 두게 함. Picker로 선택한 항목은 `drive.file` 스코프에서도 접근 허용되므로 광범위한 Drive 권한 요청 없이 구현 가능 |
+
+**추가로 활성화해야 하는 Google Cloud API**: Google Drive API, Google Sheets API, Google Picker API 세 가지 모두 Cloud Console의 "API 및 서비스 → 라이브러리"에서 켜야 함 (OAuth 클라이언트 생성만으로는 자동 활성화되지 않음).
 
 ## 5. 개발 워크플로우
 

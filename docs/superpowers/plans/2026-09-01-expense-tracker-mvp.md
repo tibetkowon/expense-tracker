@@ -528,6 +528,215 @@ git commit -m "feat: Google Sheets wrapper (find-or-create, append, read)"
 
 ---
 
+## Task 3b: Drive Folder Picker
+
+**Why this task exists:** originally the app always created/looked for "expense-tracker" at the root of the user's Drive (Task 3). The user asked for control over which folder it lives in, via Google's own folder picker rather than a typed-in name. Added to the spec as §3 item 6 / §4 after Task 3 shipped — see spec for full rationale (Picker-selected items are accessible under `drive.file` scope without requesting broader Drive access).
+
+**Files:**
+- Modify: `lib/sheets.ts`, `lib/sheets.test.ts` (add optional `folderId` to `findOrCreateSpreadsheet`)
+- Create: `lib/folderStorage.ts`, `lib/folderStorage.test.ts`
+- Create: `components/FolderPicker.tsx`
+- Modify: `.env.local.example` (add `NEXT_PUBLIC_GOOGLE_API_KEY`)
+
+**Interfaces:**
+- Consumes: nothing new from earlier tasks (extends Task 3's `findOrCreateSpreadsheet`)
+- Produces:
+  - `findOrCreateSpreadsheet(accessToken: string, folderId?: string): Promise<string>` — **signature change**: Task 4/5 must pass the folder id through when calling this
+  - `getSavedFolderId(): string | null` and `saveFolderId(id: string): void` from `lib/folderStorage.ts`
+  - `<FolderPicker accessToken={string} apiKey={string} onPicked={(folderId: string, folderName: string) => void} />` from `components/FolderPicker.tsx`
+
+**Required manual setup (pending on the user, same as Task 2 Step 7):** in Google Cloud Console, enable the **Google Picker API** (APIs & Services → Library), and create an API key (APIs & Services → Credentials → Create Credentials → API key), restricted to the Picker API. Add it to `.env.local` as `NEXT_PUBLIC_GOOGLE_API_KEY`. Also confirm **Google Drive API** and **Google Sheets API** are enabled there too — these were needed since Task 3 but never explicitly called out to enable them, which will surface as a runtime 403 the first time a real Sheets/Drive call is made if missed.
+
+- [ ] **Step 1: Write the failing tests for the folderId-aware Sheets wrapper**
+
+Modify `lib/sheets.test.ts`, adding these cases (keep the existing 5 tests as-is):
+
+```ts
+describe('findOrCreateSpreadsheet with a folderId', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('scopes the search query to the given folder', async () => {
+    (google.drive as any)().files.list.mockResolvedValue({ data: { files: [] } });
+    (google.drive as any)().files.create.mockResolvedValue({ data: { id: 'new-id' } });
+
+    await findOrCreateSpreadsheet('token', 'folder-123');
+
+    expect((google.drive as any)().files.list).toHaveBeenCalledWith(
+      expect.objectContaining({
+        q: expect.stringContaining("'folder-123' in parents"),
+      })
+    );
+  });
+
+  it('creates the spreadsheet inside the given folder', async () => {
+    (google.drive as any)().files.list.mockResolvedValue({ data: { files: [] } });
+    (google.drive as any)().files.create.mockResolvedValue({ data: { id: 'new-id' } });
+
+    await findOrCreateSpreadsheet('token', 'folder-123');
+
+    expect((google.drive as any)().files.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestBody: expect.objectContaining({ parents: ['folder-123'] }),
+      })
+    );
+  });
+});
+```
+
+- [ ] **Step 2: Run tests to verify the new ones fail**
+
+Run: `npx vitest run lib/sheets.test.ts`
+Expected: FAIL — current `findOrCreateSpreadsheet` doesn't accept or use a `folderId`
+
+- [ ] **Step 3: Update `findOrCreateSpreadsheet` to accept and use `folderId`**
+
+Modify `lib/sheets.ts`:
+
+```ts
+export async function findOrCreateSpreadsheet(
+  accessToken: string,
+  folderId?: string
+): Promise<string> {
+  const auth = authClient(accessToken);
+  const drive = google.drive({ version: 'v3', auth });
+
+  const folderClause = folderId ? ` and '${folderId}' in parents` : '';
+  const existing = await drive.files.list({
+    q: `name='${FILE_NAME}' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false${folderClause}`,
+    fields: 'files(id, name)',
+    spaces: 'drive',
+  });
+
+  const found = existing.data.files?.[0];
+  if (found?.id) return found.id;
+
+  const created = await drive.files.create({
+    requestBody: {
+      name: FILE_NAME,
+      mimeType: 'application/vnd.google-apps.spreadsheet',
+      ...(folderId ? { parents: [folderId] } : {}),
+    },
+    fields: 'id',
+  });
+
+  if (!created.data.id) throw new Error('Failed to create spreadsheet');
+  return created.data.id;
+}
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `npx vitest run lib/sheets.test.ts`
+Expected: PASS (7 tests: the original 5 plus 2 new ones)
+
+- [ ] **Step 5: Write the failing tests for folder storage**
+
+Create `lib/folderStorage.test.ts`:
+
+```ts
+import { describe, it, expect, beforeEach } from 'vitest';
+import { getSavedFolderId, saveFolderId } from './folderStorage';
+
+describe('folderStorage', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('returns null when nothing has been saved', () => {
+    expect(getSavedFolderId()).toBeNull();
+  });
+
+  it('returns what was saved', () => {
+    saveFolderId('folder-123');
+    expect(getSavedFolderId()).toBe('folder-123');
+  });
+});
+```
+
+- [ ] **Step 6: Run test to verify it fails**
+
+Run: `npx vitest run lib/folderStorage.test.ts`
+Expected: FAIL — `lib/folderStorage.ts` does not exist yet
+
+- [ ] **Step 7: Implement folder storage**
+
+Create `lib/folderStorage.ts`:
+
+```ts
+const STORAGE_KEY = 'expense-tracker:folderId';
+
+export function getSavedFolderId(): string | null {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage.getItem(STORAGE_KEY);
+}
+
+export function saveFolderId(id: string): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(STORAGE_KEY, id);
+}
+```
+
+- [ ] **Step 8: Run test to verify it passes**
+
+Run: `npx vitest run lib/folderStorage.test.ts`
+Expected: PASS (2 tests)
+
+- [ ] **Step 9: Build the picker component**
+
+Create `components/FolderPicker.tsx` — a client component (`'use client'`) that:
+1. On mount, loads `https://apis.google.com/js/api.js` (skip if already present on `window`), then calls `gapi.load('picker', () => setReady(true))`.
+2. Renders a button ("저장 폴더 선택") disabled until ready; on click, builds and shows the picker:
+
+```ts
+const view = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
+  .setIncludeFolders(true)
+  .setMimeTypes('application/vnd.google-apps.folder')
+  .setSelectFolderEnabled(true);
+
+const picker = new google.picker.PickerBuilder()
+  .setOAuthToken(accessToken)
+  .setDeveloperKey(apiKey)
+  .addView(view)
+  .setCallback((data: any) => {
+    if (data.action === google.picker.Action.PICKED) {
+      const doc = data.docs[0];
+      onPicked(doc.id, doc.name);
+    }
+  })
+  .build();
+
+picker.setVisible(true);
+```
+
+3. This pattern was verified live against Google's current Picker API docs on 2026-09-02 (`DocsView(ViewId.FOLDERS).setIncludeFolders(true).setMimeTypes('application/vnd.google-apps.folder').setSelectFolderEnabled(true)`) — if the implementing agent is running this later and the docs have moved on, re-check `https://developers.google.com/workspace/drive/picker/reference/picker.docsview.setselectfolderenabled` before trusting this snippet.
+4. There's no official TypeScript types package for the Picker API's `google`/`gapi` script-loaded globals — declare them loosely at the top of this file (`declare const gapi: any; declare const google: any;`) rather than fighting for exact types, so `tsc`/`next build` don't fail on missing declarations.
+
+- [ ] **Step 10: Wire it into `app/page.tsx`**
+
+In the signed-in view, render `<FolderPicker accessToken={session.accessToken} apiKey={process.env.NEXT_PUBLIC_GOOGLE_API_KEY!} onPicked={(id, name) => { saveFolderId(id); setFolderId(id); }} />` above the expense form, and show the currently-saved folder name (or "Drive 루트" if none picked) next to it. `folderId` becomes page-level state, initialized from `getSavedFolderId()` on mount (client-side effect, since `localStorage` isn't available during server render), and gets passed down to whatever calls `/api/expenses` (wired in Task 4/5).
+
+- [ ] **Step 11: Update `.env.local.example`**
+
+```bash
+AUTH_GOOGLE_ID=
+AUTH_GOOGLE_SECRET=
+AUTH_SECRET=
+AI_GATEWAY_API_KEY=
+NEXT_PUBLIC_GOOGLE_API_KEY=
+```
+
+- [ ] **Step 12: Run full test suite and build**
+
+Run: `npm test && npm run build`
+Expected: all tests pass (12 total: 3 token + 7 sheets + 2 folderStorage), build succeeds
+
+- [ ] **Step 13: Commit**
+
+```bash
+git add -A
+git commit -m "feat: Drive folder picker for choosing where the sheet lives"
+```
+
+---
+
 ## Task 4: Manual Expense Entry
 
 **Files:**
@@ -536,11 +745,11 @@ git commit -m "feat: Google Sheets wrapper (find-or-create, append, read)"
 - Create: `components/ExpenseForm.tsx`
 
 **Interfaces:**
-- Consumes: `auth()` from Task 2, `findOrCreateSpreadsheet` + `appendExpenseRow` + `ExpenseRow` from Task 3
+- Consumes: `auth()` from Task 2, `findOrCreateSpreadsheet` (now `(accessToken, folderId?)`) + `appendExpenseRow` + `ExpenseRow` from Task 3/3b, `getSavedFolderId` from Task 3b
 - Produces:
   - `type ExpenseInput = { date: string; amount: number; category: string; memo: string; method: string }`
   - `validateExpenseInput(input: unknown): ExpenseInput` (throws `ZodError` on invalid input) from `lib/expense.ts`
-  - `<ExpenseForm onSubmitted={() => void} initialValues={Partial<ExpenseInput>} />` from `components/ExpenseForm.tsx` — Task 7 passes `initialValues` from OCR results
+  - `<ExpenseForm onSubmitted={() => void} initialValues={Partial<ExpenseInput>} folderId={string | null} />` from `components/ExpenseForm.tsx` — Task 7 passes `initialValues` from OCR results; `folderId` comes from the page-level state Task 3b set up and is sent along with the POST body so the server knows which folder's spreadsheet to write to
 
 - [ ] **Step 1: Write the failing tests for validation**
 
@@ -643,9 +852,10 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const expense = validateExpenseInput(body);
+  const { folderId, ...expenseInput } = body;
+  const expense = validateExpenseInput(expenseInput);
 
-  const spreadsheetId = await findOrCreateSpreadsheet(session.accessToken);
+  const spreadsheetId = await findOrCreateSpreadsheet(session.accessToken, folderId ?? undefined);
   await appendExpenseRow(session.accessToken, spreadsheetId, expense);
 
   return NextResponse.json({ ok: true });
@@ -654,7 +864,7 @@ export async function POST(request: Request) {
 
 - [ ] **Step 6: Build the form component**
 
-Create `components/ExpenseForm.tsx` — a client component (`'use client'`) with controlled inputs for date/amount/category/memo/method, accepting an optional `initialValues: Partial<ExpenseInput>` prop (used later by Task 7's OCR flow) and an `onSubmitted: () => void` callback. The category field is a text input with a `<datalist>` of preset options (`식비`, `교통`, `쇼핑`, `주거`, `기타`) — this satisfies spec §3 item 4 ("기본 카테고리 + 커스텀 추가") without a separate category-management screen: presets show as suggestions, but any typed value is accepted and saved as-is. On submit, `POST` to `/api/expenses` with `fetch`, show an inline error if the response is not OK, call `onSubmitted()` on success.
+Create `components/ExpenseForm.tsx` — a client component (`'use client'`) with controlled inputs for date/amount/category/memo/method, accepting an optional `initialValues: Partial<ExpenseInput>` prop (used later by Task 7's OCR flow), a `folderId: string | null` prop, and an `onSubmitted: () => void` callback. The category field is a text input with a `<datalist>` of preset options (`식비`, `교통`, `쇼핑`, `주거`, `기타`) — this satisfies spec §3 item 4 ("기본 카테고리 + 커스텀 추가") without a separate category-management screen: presets show as suggestions, but any typed value is accepted and saved as-is. On submit, `POST` to `/api/expenses` with `fetch`, sending `{ ...formValues, folderId }` as the JSON body, show an inline error if the response is not OK, call `onSubmitted()` on success.
 
 - [ ] **Step 7: Wire the form into the signed-in view of `app/page.tsx`**
 
@@ -680,8 +890,8 @@ git commit -m "feat: manual expense entry form and API route"
 - Create: `components/ExpenseList.tsx`, `components/MonthlySummary.tsx`
 
 **Interfaces:**
-- Consumes: `readExpenseRows` + `ExpenseRow` from Task 3, `auth()` from Task 2
-- Produces: `summarizeByMonth(rows: ExpenseRow[], month: string): { total: number; count: number }` from `lib/summary.ts`. GET `/api/expenses` returns `{ expenses: ExpenseRow[], monthlyTotal: number }`.
+- Consumes: `readExpenseRows` + `ExpenseRow` from Task 3, `findOrCreateSpreadsheet` (`(accessToken, folderId?)`) from Task 3/3b, `auth()` from Task 2
+- Produces: `summarizeByMonth(rows: ExpenseRow[], month: string): { total: number; count: number }` from `lib/summary.ts`. GET `/api/expenses?folderId=<id>` (folderId optional) returns `{ expenses: ExpenseRow[], monthlyTotal: number }`.
 
 - [ ] **Step 1: Write the failing tests for the summary function**
 
@@ -743,13 +953,14 @@ Modify `app/api/expenses/route.ts` to add:
 import { readExpenseRows } from '@/lib/sheets';
 import { summarizeByMonth } from '@/lib/summary';
 
-export async function GET() {
+export async function GET(request: Request) {
   const session = await auth();
   if (!session?.accessToken) {
     return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
   }
 
-  const spreadsheetId = await findOrCreateSpreadsheet(session.accessToken);
+  const folderId = new URL(request.url).searchParams.get('folderId') ?? undefined;
+  const spreadsheetId = await findOrCreateSpreadsheet(session.accessToken, folderId);
   const expenses = await readExpenseRows(session.accessToken, spreadsheetId);
   const currentMonth = new Date().toISOString().slice(0, 7);
   const { total } = summarizeByMonth(expenses, currentMonth);
@@ -763,7 +974,7 @@ export async function GET() {
 `components/ExpenseList.tsx`: renders the most recent expenses (date, category, amount, memo) passed in as props.
 `components/MonthlySummary.tsx`: renders the monthly total passed in as a prop.
 
-Wire both into `app/page.tsx`, fetching from `GET /api/expenses` after sign-in and after `ExpenseForm`'s `onSubmitted` fires (refetch to show the new row).
+Wire both into `app/page.tsx`, fetching from `GET /api/expenses?folderId=<folderId>` (from the same page-level `folderId` state Task 3b introduced) after sign-in and after `ExpenseForm`'s `onSubmitted` fires (refetch to show the new row).
 
 - [ ] **Step 7: Run full test suite and build**
 
@@ -1090,7 +1301,8 @@ git commit -m "feat: PWA manifest and home screen icons"
 - `npm test` passes with all unit tests green
 - `npm run build` succeeds
 - Signed-in user can: manually add an expense and see it in the list and monthly total; upload a receipt photo, see OCR-prefilled values, edit and confirm, and see it saved
-- Data lands in a Google Sheet named "expense-tracker" in the user's own Drive
+- Data lands in a Google Sheet named "expense-tracker", in the Drive folder the user picked (or Drive root if none picked)
+- User can pick a Drive folder via the Picker and it's remembered across visits (same device)
 - App installs to an iPhone home screen and opens in standalone mode
 
 ## Execution Handoff
