@@ -23,6 +23,23 @@ export async function findOrCreateSpreadsheet(
 ): Promise<string> {
   const auth = authClient(accessToken);
   const drive = google.drive({ version: 'v3', auth });
+  const sheets = google.sheets({ version: 'v4', auth });
+
+  const renameFirstSheet = async (spreadsheetId: string) => {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [
+          {
+            updateSheetProperties: {
+              properties: { sheetId: 0, title: 'Sheet1' },
+              fields: 'title',
+            },
+          },
+        ],
+      },
+    });
+  };
 
   const folderClause = folderId ? ` and '${folderId}' in parents` : '';
   const existing = await drive.files.list({
@@ -32,7 +49,10 @@ export async function findOrCreateSpreadsheet(
   });
 
   const found = existing.data.files?.[0];
-  if (found?.id) return found.id;
+  if (found?.id) {
+    await renameFirstSheet(found.id);
+    return found.id;
+  }
 
   const created = await drive.files.create({
     requestBody: {
@@ -44,21 +64,7 @@ export async function findOrCreateSpreadsheet(
   });
 
   if (!created.data.id) throw new Error('Failed to create spreadsheet');
-
-  const sheets = google.sheets({ version: 'v4', auth });
-  await sheets.spreadsheets.batchUpdate({
-    spreadsheetId: created.data.id,
-    requestBody: {
-      requests: [
-        {
-          updateSheetProperties: {
-            properties: { sheetId: 0, title: 'Sheet1' },
-            fields: 'title',
-          },
-        },
-      ],
-    },
-  });
+  await renameFirstSheet(created.data.id);
 
   return created.data.id;
 }

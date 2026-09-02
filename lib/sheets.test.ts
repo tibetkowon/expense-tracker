@@ -36,7 +36,19 @@ describe('findOrCreateSpreadsheet', () => {
     const id = await findOrCreateSpreadsheet('token');
     expect(id).toBe('existing-id');
     expect((google.drive as any)().files.create).not.toHaveBeenCalled();
-    expect((google.sheets as any)().spreadsheets.batchUpdate).not.toHaveBeenCalled();
+    expect((google.sheets as any)().spreadsheets.batchUpdate).toHaveBeenCalledWith({
+      spreadsheetId: 'existing-id',
+      requestBody: {
+        requests: [
+          {
+            updateSheetProperties: {
+              properties: { sheetId: 0, title: 'Sheet1' },
+              fields: 'title',
+            },
+          },
+        ],
+      },
+    });
   });
 
   it('creates a new spreadsheet when none is found', async () => {
