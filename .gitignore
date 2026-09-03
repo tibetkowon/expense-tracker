@@ -34,3 +34,6 @@ yarn-error.log*
 
 # claude code local session state
 .claude/
+
+# playwright MCP scratch output (used for one-off asset rendering)
+.playwright-mcp/

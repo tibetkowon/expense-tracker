@@ -1275,11 +1275,11 @@ git commit -m "feat: wire receipt OCR into the expense form as a pre-fill"
 - Consumes: nothing
 - Produces: nothing consumed by other tasks (final task)
 
-- [ ] **Step 1: Generate app icons**
+- [x] **Step 1: Generate app icons**
 
 Create two simple placeholder PNG icons (192x192 and 512x512) — e.g. a solid-color square with "₩" or the app initial, generated with any image tool or a one-off script (e.g. `npx pwa-asset-generator` or manual export from Figma/Preview). Save as `public/icons/icon-192.png` and `public/icons/icon-512.png`. These are placeholders; visual polish is not part of the MVP.
 
-- [ ] **Step 2: Add the Next.js native manifest route**
+- [x] **Step 2: Add the Next.js native manifest route**
 
 Create `app/manifest.ts`:
 
@@ -1303,7 +1303,7 @@ export default function manifest(): MetadataRoute.Manifest {
 }
 ```
 
-- [ ] **Step 3: Verify the manifest is served correctly**
+- [x] **Step 3: Verify the manifest is served correctly**
 
 Run: `npm run dev`, then in another terminal:
 
@@ -1317,7 +1317,7 @@ Expected: valid JSON matching the manifest above.
 
 Open the dev server's URL (or a deployed preview) in Safari on the iPhone, tap Share → "홈 화면에 추가", confirm the icon and name appear correctly and the app opens without browser chrome.
 
-- [ ] **Step 5: Run full test suite and build**
+- [x] **Step 5: Run full test suite and build**
 
 Run: `npm test && npm run build`
 Expected: all tests pass, build succeeds
