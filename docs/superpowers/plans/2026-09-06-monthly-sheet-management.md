@@ -17,7 +17,8 @@
 - Header row is exactly `날짜 | 금액 | 카테고리 | 메모 | 결제수단`, row 1 of every month sheet (spec §2).
 - File name defaults to `expense-tracker`, user-editable, stored client-side only (spec §2, matches existing `folderId` pattern — no server DB).
 - Legacy `Sheet1` migration is automatic, one-time, and idempotent; the legacy tab is deleted only after its rows are copied into month sheets (spec §3).
-- `GET /api/expenses` must never create a sheet as a side effect (read-only); only `POST` creates sheets (spec §4, §5 implied by "저장되는" scoping to writes).
+- `GET /api/expenses` must never create a new **month sheet** as a side effect of viewing a month with no data (only `POST` creates month sheets, via `ensureMonthSheet`). File-level find-or-create and the one-time legacy migration are fine on both `GET` and `POST` — this matches the pre-existing app behavior (the original `GET` handler already lazily created the spreadsheet file), so it is not a new side effect being introduced.
+- Changing the file name (Task 7) must **rename the existing spreadsheet file** via the Drive API, never search-by-new-name-and-create — that would silently produce a second file and violate the "1 file" constraint above.
 - Do not implement edit/delete (feedback item 1) or touch `FolderPicker`'s Google Picker rendering, the payment-method `<select>` styling, or the PWA manifest — out of scope (spec §6).
 - OAuth scope stays `drive.file` + `spreadsheets` (project `CLAUDE.md` constraint) — no new Google API calls beyond Sheets/Drive v3/v4 already in use.
 - For any Next.js compilation check, prefer `next build --webpack` if the normal build is blocked by sandbox restrictions (project `CLAUDE.md` — Codex environment constraints).
@@ -880,17 +881,126 @@ git commit -m "feat: add MonthSelector component"
 
 ---
 
-### Task 7: `components/FileNameSetting.tsx` — file name editor + wire into `FolderPickerSection`
+### Task 7: File rename endpoint + `components/FileNameSetting.tsx` + wire into `FolderPickerSection`
+
+Changing the file name must rename the *existing* spreadsheet file (Drive API), not search for a file under the new name and create one when it's not found — that would silently leave two files behind, breaking the "1 file" constraint (spec §2, Global Constraints above).
 
 **Files:**
+- Modify: `lib/sheets.ts` (add `renameSpreadsheetFile`)
+- Modify: `lib/sheets.test.ts` (test `renameSpreadsheetFile`)
+- Create: `app/api/file-name/route.ts`
 - Create: `components/FileNameSetting.tsx`
 - Modify: `components/FolderPicker.tsx` (render `<FileNameSetting />` inside `FolderPickerSection`, per spec §7 — same section as the folder picker)
 
 **Interfaces:**
-- Consumes: `DEFAULT_FILE_NAME`, `getSavedFileName`, `saveFileName` (Task 1).
-- Produces: `FileNameSetting()` — a self-contained client component, no props.
+- Consumes: `findOrCreateSpreadsheet` (Task 3), `DEFAULT_FILE_NAME`, `getSavedFileName`, `saveFileName` (Task 1), `getSavedFolderId` (existing `lib/folderStorage.ts`).
+- Produces: `renameSpreadsheetFile(accessToken, spreadsheetId, newName): Promise<void>` (`lib/sheets.ts`); `POST /api/file-name` accepting `{ folderId?, currentFileName, newFileName }`, returning `{ ok: true }` or a 4xx with `{ error }`; `FileNameSetting()` — a self-contained client component, no props.
 
-- [ ] **Step 1: Write the component**
+- [ ] **Step 1: Write the failing test for `renameSpreadsheetFile`**
+
+Add to `lib/sheets.test.ts`:
+
+```ts
+describe('renameSpreadsheetFile', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('renames the file via the Drive API', async () => {
+    (google.drive as any)().files.update = vi.fn().mockResolvedValue({});
+
+    await renameSpreadsheetFile('token', 'sheet-id', '가계부');
+
+    expect((google.drive as any)().files.update).toHaveBeenCalledWith({
+      fileId: 'sheet-id',
+      requestBody: { name: '가계부' },
+    });
+  });
+});
+```
+
+Add `update: vi.fn()` to the `files` object in the `vi.mock('googleapis', ...)` block at the top of the test file (alongside the existing `list`/`create`), and add `renameSpreadsheetFile` to the import line.
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `npx vitest run lib/sheets.test.ts`
+Expected: FAIL — `renameSpreadsheetFile is not a function`
+
+- [ ] **Step 3: Implement `renameSpreadsheetFile`**
+
+Add to `lib/sheets.ts`, near `findOrCreateSpreadsheet`:
+
+```ts
+export async function renameSpreadsheetFile(
+  accessToken: string,
+  spreadsheetId: string,
+  newName: string
+): Promise<void> {
+  const auth = authClient(accessToken);
+  const drive = google.drive({ version: 'v3', auth });
+
+  await drive.files.update({
+    fileId: spreadsheetId,
+    requestBody: { name: newName },
+  });
+}
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `npx vitest run lib/sheets.test.ts`
+Expected: PASS — full file green, including the new `renameSpreadsheetFile` block.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add lib/sheets.ts lib/sheets.test.ts
+git commit -m "feat: add renameSpreadsheetFile"
+```
+
+- [ ] **Step 6: Write the rename API route**
+
+```ts
+// app/api/file-name/route.ts
+import { NextResponse } from 'next/server';
+import { auth } from '@/auth';
+import { findOrCreateSpreadsheet, renameSpreadsheetFile } from '@/lib/sheets';
+
+export async function POST(request: Request) {
+  const session = await auth();
+  if (!session?.accessToken) {
+    return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
+  }
+
+  const body = await request.json();
+  const { folderId, currentFileName, newFileName } = body;
+
+  if (typeof newFileName !== 'string' || newFileName.trim() === '') {
+    return NextResponse.json({ error: 'newFileName is required' }, { status: 400 });
+  }
+
+  const spreadsheetId = await findOrCreateSpreadsheet(
+    session.accessToken,
+    folderId ?? undefined,
+    currentFileName ?? undefined
+  );
+  await renameSpreadsheetFile(session.accessToken, spreadsheetId, newFileName.trim());
+
+  return NextResponse.json({ ok: true });
+}
+```
+
+- [ ] **Step 7: Type-check**
+
+Run: `next build --webpack`
+Expected: succeeds.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add app/api/file-name/route.ts
+git commit -m "feat: add file rename API route"
+```
+
+- [ ] **Step 9: Write `FileNameSetting`**
 
 ```tsx
 // components/FileNameSetting.tsx
@@ -898,11 +1008,14 @@ git commit -m "feat: add MonthSelector component"
 
 import { useEffect, useState } from 'react';
 import { DEFAULT_FILE_NAME, getSavedFileName, saveFileName } from '@/lib/fileNameStorage';
+import { getSavedFolderId } from '@/lib/folderStorage';
 
 export default function FileNameSetting() {
   const [fileName, setFileName] = useState(DEFAULT_FILE_NAME);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(DEFAULT_FILE_NAME);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const saved = getSavedFileName();
@@ -910,26 +1023,55 @@ export default function FileNameSetting() {
     setDraft(saved);
   }, []);
 
-  function commit() {
+  async function commit() {
     const next = draft.trim() || DEFAULT_FILE_NAME;
-    saveFileName(next);
-    setFileName(next);
-    setDraft(next);
-    setEditing(false);
+
+    if (next === fileName) {
+      setEditing(false);
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      const folderId = getSavedFolderId();
+      const response = await fetch('/api/file-name', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folderId, currentFileName: fileName, newFileName: next }),
+      });
+
+      if (!response.ok) throw new Error('파일명 변경에 실패했습니다.');
+
+      saveFileName(next);
+      setFileName(next);
+      setDraft(next);
+      setEditing(false);
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : '파일명 변경에 실패했습니다.');
+      setDraft(fileName);
+    } finally {
+      setSaving(false);
+    }
   }
 
   if (editing) {
     return (
-      <input
-        autoFocus
-        className="border-b border-indigo-500 bg-transparent text-[14px] font-medium text-gray-800 outline-none"
-        value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-        onBlur={commit}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') commit();
-        }}
-      />
+      <div className="flex flex-col gap-1">
+        <input
+          autoFocus
+          disabled={saving}
+          className="border-b border-indigo-500 bg-transparent text-[14px] font-medium text-gray-800 outline-none disabled:opacity-60"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={commit}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') commit();
+          }}
+        />
+        {error ? <span className="text-[11px] text-red-500">{error}</span> : null}
+      </div>
     );
   }
 
@@ -951,7 +1093,7 @@ export default function FileNameSetting() {
 }
 ```
 
-- [ ] **Step 2: Wire it into `FolderPickerSection`**
+- [ ] **Step 10: Wire it into `FolderPickerSection`**
 
 In `components/FolderPicker.tsx`, add the import:
 
@@ -999,12 +1141,12 @@ export function FolderPickerSection({ accessToken, apiKey }: Omit<FolderPickerPr
 
 (Note the outer `<div>`'s className changes from `"border-b border-gray-100 px-5 py-4"` to `"flex flex-col gap-3 border-b border-gray-100 px-5 py-4"` to stack the two rows with spacing.)
 
-- [ ] **Step 3: Type-check**
+- [ ] **Step 11: Type-check**
 
 Run: `next build --webpack`
 Expected: succeeds.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 12: Commit**
 
 ```bash
 git add components/FileNameSetting.tsx components/FolderPicker.tsx
