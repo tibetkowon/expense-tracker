@@ -4,8 +4,10 @@ import { FormEvent, useEffect, useState } from 'react';
 import type { ExpenseInput } from '@/lib/expense';
 import { getSavedFolderId } from '@/lib/folderStorage';
 
+import { getSavedFileName } from '@/lib/fileNameStorage';
+
 type ExpenseFormProps = {
-  onSubmitted: () => void;
+  onSubmitted: (month: string) => void;
   onSuccess?: (message: string) => void;
   initialValues?: Partial<ExpenseInput>;
 };
@@ -53,15 +55,16 @@ export default function ExpenseForm({
 
     try {
       const folderId = getSavedFolderId();
+      const fileName = getSavedFileName();
       const response = await fetch('/api/expenses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date, amount: Number(amount), category, memo, method, folderId }),
+        body: JSON.stringify({ date, amount: Number(amount), category, memo, method, folderId, fileName }),
       });
 
       if (!response.ok) throw new Error('지출 저장에 실패했습니다.');
 
-      onSubmitted();
+      onSubmitted(date.slice(0, 7));
       onSuccess?.('저장했습니다');
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : '지출 저장에 실패했습니다.');

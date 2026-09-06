@@ -40,7 +40,7 @@ This repo unit-tests `lib/*.ts` modules only (mocked `googleapis`, see `lib/shee
 **Interfaces:**
 - Produces: `DEFAULT_FILE_NAME: string`, `getSavedFileName(): string`, `saveFileName(name: string): void` — consumed by Task 3 (`lib/sheets.ts`), Task 7 (`components/FileNameSetting.tsx`), Task 8 (`components/ExpenseForm.tsx`), Task 9 (`components/ExpenseDashboard.tsx`).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // lib/fileNameStorage.test.ts
@@ -69,12 +69,12 @@ describe('fileNameStorage', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run lib/fileNameStorage.test.ts`
 Expected: FAIL — `Cannot find module './fileNameStorage'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```ts
 // lib/fileNameStorage.ts
@@ -93,12 +93,12 @@ export function saveFileName(name: string): void {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run lib/fileNameStorage.test.ts`
 Expected: PASS (3 tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add lib/fileNameStorage.ts lib/fileNameStorage.test.ts
@@ -117,7 +117,7 @@ git commit -m "feat: add client-side file name storage"
 - Consumes: nothing new (still only `googleapis`).
 - Produces: `ensureMonthSheet(accessToken, spreadsheetId, month): Promise<void>`, `appendExpenseRow(accessToken, spreadsheetId, month, row): Promise<void>`, `readExpenseRows(accessToken, spreadsheetId, month): Promise<ExpenseRow[]>`, `listAvailableMonths(accessToken, spreadsheetId): Promise<string[]>` — consumed by Task 3 (migration) and Task 4 (API route).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Replace the `appendExpenseRow` and `readExpenseRows` describe blocks in `lib/sheets.test.ts`, and add new ones, so the file's mock and relevant sections read:
 
@@ -267,12 +267,12 @@ import {
 } from './sheets';
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run lib/sheets.test.ts`
 Expected: FAIL — `ensureMonthSheet`/`listAvailableMonths` not exported, and the updated `appendExpenseRow`/`readExpenseRows` call-shape assertions fail against the old 2-argument signature.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `lib/sheets.ts`, add a `SheetInfo` type and `listSheets` helper above `findOrCreateSpreadsheet`, and replace `appendExpenseRow`/`readExpenseRows` with month-aware versions, adding `ensureMonthSheet` and `listAvailableMonths`:
 
@@ -383,12 +383,12 @@ export async function listAvailableMonths(
 
 Leave `findOrCreateSpreadsheet` and `renameFirstSheet` untouched in this task — Task 3 replaces them.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npx vitest run lib/sheets.test.ts`
 Expected: PASS for the new/updated `ensureMonthSheet`, `appendExpenseRow`, `readExpenseRows`, `listAvailableMonths` blocks. The pre-existing `findOrCreateSpreadsheet` tests still pass unchanged since that function is untouched in this task.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add lib/sheets.ts lib/sheets.test.ts
@@ -407,7 +407,7 @@ git commit -m "feat: add month-scoped sheet read/write primitives"
 - Consumes: `ensureMonthSheet`, `appendExpenseRow`, `listSheets` (from Task 2, same file).
 - Produces: `findOrCreateSpreadsheet(accessToken, folderId?, fileName?): Promise<string>` (new 3rd parameter, defaults to `DEFAULT_FILE_NAME` from `lib/fileNameStorage.ts`) — consumed by Task 4 (`app/api/expenses/route.ts`).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Replace the two `describe('findOrCreateSpreadsheet', ...)` blocks in `lib/sheets.test.ts` (the ones asserting `renameFirstSheet`'s `batchUpdate` call) with:
 
@@ -556,12 +556,12 @@ describe('findOrCreateSpreadsheet legacy data migration', () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run lib/sheets.test.ts`
 Expected: FAIL — `findOrCreateSpreadsheet` still calls the old `renameFirstSheet` unconditionally (extra `batchUpdate` call the new tests don't expect), doesn't accept a 3rd `fileName` argument, and never calls `spreadsheets.get`/`values.get` for migration.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `lib/fileNameStorage.ts` there is already `DEFAULT_FILE_NAME`. Import it into `lib/sheets.ts`:
 
@@ -671,12 +671,12 @@ async function migrateLegacySheetIfPresent(
 
 `migrateLegacySheetIfPresent` and `readLegacyRows` are not exported — they're only reached through `findOrCreateSpreadsheet`.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npx vitest run lib/sheets.test.ts`
 Expected: PASS — full file (all describe blocks from Task 2 and Task 3) green.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add lib/sheets.ts lib/sheets.test.ts
@@ -694,7 +694,7 @@ git commit -m "feat: support custom file name and migrate legacy Sheet1 data"
 - Consumes: `findOrCreateSpreadsheet(accessToken, folderId?, fileName?)`, `appendExpenseRow(accessToken, spreadsheetId, month, row)`, `readExpenseRows(accessToken, spreadsheetId, month)`, `listAvailableMonths(accessToken, spreadsheetId)` (all from Task 2/3).
 - Produces: `GET` response shape `{ expenses: ExpenseRow[], monthlyTotal: number, availableMonths: string[], selectedMonth: string }` — consumed by Task 9 (`ExpenseDashboard`). `POST` response shape stays `{ ok: true }`; the client already knows which month it wrote (Task 8 derives it from the submitted `date`), so the server doesn't need to echo it back.
 
-- [ ] **Step 1: Replace the route file**
+- [x] **Step 1: Replace the route file**
 
 ```ts
 import { NextResponse } from 'next/server';
@@ -768,12 +768,12 @@ export async function POST(request: Request) {
 }
 ```
 
-- [ ] **Step 2: Type-check**
+- [x] **Step 2: Type-check**
 
 Run: `next build --webpack` (per project `CLAUDE.md` — use this form if the sandboxed environment blocks the default Turbopack build)
 Expected: build succeeds with no type errors in `app/api/expenses/route.ts`. (The supervising Claude Code session still owes this route a live end-to-end check per "Testing scope" above — Codex cannot reach the network to exercise it.)
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add app/api/expenses/route.ts
@@ -791,7 +791,7 @@ git commit -m "feat: add month and fileName support to expenses API"
 - Consumes: nothing new.
 - Produces: `MonthlySummary({ total, month }: { total: number; month: string })` where `month` is `YYYY-MM` — consumed by Task 9 (`ExpenseDashboard`).
 
-- [ ] **Step 1: Replace the component**
+- [x] **Step 1: Replace the component**
 
 ```tsx
 export default function MonthlySummary({ total, month }: { total: number; month: string }) {
@@ -810,12 +810,12 @@ export default function MonthlySummary({ total, month }: { total: number; month:
 }
 ```
 
-- [ ] **Step 2: Type-check**
+- [x] **Step 2: Type-check**
 
 Run: `next build --webpack`
 Expected: fails at this point only because `ExpenseDashboard` (Task 9, not yet updated) still calls `<MonthlySummary total={...} />` without `month`. That's expected until Task 9 lands — do not fix `ExpenseDashboard` here.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add components/MonthlySummary.tsx
@@ -832,7 +832,7 @@ git commit -m "feat: MonthlySummary displays the selected month, not just today"
 **Interfaces:**
 - Produces: `MonthSelector({ months, selected, onChange }: { months: string[]; selected: string; onChange: (month: string) => void })` — consumed by Task 9 (`ExpenseDashboard`).
 
-- [ ] **Step 1: Write the component**
+- [x] **Step 1: Write the component**
 
 ```tsx
 'use client';
@@ -867,12 +867,12 @@ export default function MonthSelector({ months, selected, onChange }: MonthSelec
 }
 ```
 
-- [ ] **Step 2: Type-check**
+- [x] **Step 2: Type-check**
 
 Run: `next build --webpack`
 Expected: succeeds (this component isn't wired into any page yet, but it's self-contained and type-checks on its own).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add components/MonthSelector.tsx
@@ -896,7 +896,7 @@ Changing the file name must rename the *existing* spreadsheet file (Drive API), 
 - Consumes: `findOrCreateSpreadsheet` (Task 3), `DEFAULT_FILE_NAME`, `getSavedFileName`, `saveFileName` (Task 1), `getSavedFolderId` (existing `lib/folderStorage.ts`).
 - Produces: `renameSpreadsheetFile(accessToken, spreadsheetId, newName): Promise<void>` (`lib/sheets.ts`); `POST /api/file-name` accepting `{ folderId?, currentFileName, newFileName }`, returning `{ ok: true }` or a 4xx with `{ error }`; `FileNameSetting()` — a self-contained client component, no props.
 
-- [ ] **Step 1: Write the failing test for `renameSpreadsheetFile`**
+- [x] **Step 1: Write the failing test for `renameSpreadsheetFile`**
 
 Add to `lib/sheets.test.ts`:
 
@@ -919,12 +919,12 @@ describe('renameSpreadsheetFile', () => {
 
 Add `update: vi.fn()` to the `files` object in the `vi.mock('googleapis', ...)` block at the top of the test file (alongside the existing `list`/`create`), and add `renameSpreadsheetFile` to the import line.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run lib/sheets.test.ts`
 Expected: FAIL — `renameSpreadsheetFile is not a function`
 
-- [ ] **Step 3: Implement `renameSpreadsheetFile`**
+- [x] **Step 3: Implement `renameSpreadsheetFile`**
 
 Add to `lib/sheets.ts`, near `findOrCreateSpreadsheet`:
 
@@ -944,19 +944,19 @@ export async function renameSpreadsheetFile(
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run lib/sheets.test.ts`
 Expected: PASS — full file green, including the new `renameSpreadsheetFile` block.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add lib/sheets.ts lib/sheets.test.ts
 git commit -m "feat: add renameSpreadsheetFile"
 ```
 
-- [ ] **Step 6: Write the rename API route**
+- [x] **Step 6: Write the rename API route**
 
 ```ts
 // app/api/file-name/route.ts
@@ -988,19 +988,19 @@ export async function POST(request: Request) {
 }
 ```
 
-- [ ] **Step 7: Type-check**
+- [x] **Step 7: Type-check**
 
 Run: `next build --webpack`
 Expected: succeeds.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add app/api/file-name/route.ts
 git commit -m "feat: add file rename API route"
 ```
 
-- [ ] **Step 9: Write `FileNameSetting`**
+- [x] **Step 9: Write `FileNameSetting`**
 
 ```tsx
 // components/FileNameSetting.tsx
@@ -1093,7 +1093,7 @@ export default function FileNameSetting() {
 }
 ```
 
-- [ ] **Step 10: Wire it into `FolderPickerSection`**
+- [x] **Step 10: Wire it into `FolderPickerSection`**
 
 In `components/FolderPicker.tsx`, add the import:
 
@@ -1141,12 +1141,12 @@ export function FolderPickerSection({ accessToken, apiKey }: Omit<FolderPickerPr
 
 (Note the outer `<div>`'s className changes from `"border-b border-gray-100 px-5 py-4"` to `"flex flex-col gap-3 border-b border-gray-100 px-5 py-4"` to stack the two rows with spacing.)
 
-- [ ] **Step 11: Type-check**
+- [x] **Step 11: Type-check**
 
 Run: `next build --webpack`
 Expected: succeeds.
 
-- [ ] **Step 12: Commit**
+- [x] **Step 12: Commit**
 
 ```bash
 git add components/FileNameSetting.tsx components/FolderPicker.tsx
@@ -1164,7 +1164,7 @@ git commit -m "feat: add file name setting to the storage location section"
 - Consumes: `getSavedFileName` (Task 1).
 - Produces: `ExpenseForm`'s `onSubmitted` prop changes from `() => void` to `(month: string) => void` — consumed by Task 9 (`ExpenseDashboard`).
 
-- [ ] **Step 1: Update the component**
+- [x] **Step 1: Update the component**
 
 Change the prop type:
 
@@ -1211,12 +1211,12 @@ async function handleSubmit(event: FormEvent<HTMLFormElement>) {
 }
 ```
 
-- [ ] **Step 2: Type-check**
+- [x] **Step 2: Type-check**
 
 Run: `next build --webpack`
 Expected: fails at this point only because `ExpenseDashboard` (Task 9, not yet updated) still passes `onSubmitted={() => void refetch()}`, a `0`-argument function, to a prop now typed `(month: string) => void`. That's expected — a `0`-arg function is assignable where a `1`-arg callback is expected in TypeScript's function parameter bivariance, so this actually still compiles. Confirm the build has no *new* errors beyond what Task 9 will address.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add components/ExpenseForm.tsx
@@ -1233,7 +1233,7 @@ git commit -m "feat: send fileName with new expenses, report the saved month"
 **Interfaces:**
 - Consumes: `MonthSelector` (Task 6), `MonthlySummary({ total, month })` (Task 5), `ExpenseForm`'s `onSubmitted(month)` (Task 8), `getSavedFileName` (Task 1), API response shape `{ expenses, monthlyTotal, availableMonths, selectedMonth }` (Task 4).
 
-- [ ] **Step 1: Replace the component**
+- [x] **Step 1: Replace the component**
 
 ```tsx
 'use client';
@@ -1317,12 +1317,12 @@ export default function ExpenseDashboard() {
 }
 ```
 
-- [ ] **Step 2: Type-check**
+- [x] **Step 2: Type-check**
 
 Run: `next build --webpack`
 Expected: succeeds with no type errors anywhere in `components/` or `app/`.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add components/ExpenseDashboard.tsx
@@ -1333,7 +1333,20 @@ git commit -m "feat: wire month selection through the dashboard"
 
 ## Post-implementation
 
-- [ ] Run the full unit test suite: `npx vitest run` — expect all `lib/*.test.ts` files green, including the untouched `lib/expense.test.ts`, `lib/folderStorage.test.ts`, `lib/ocr.test.ts`, `lib/summary.test.ts`, `lib/token.test.ts`.
-- [ ] Run `next build --webpack` once more from a clean state to confirm the whole app compiles.
+- [x] Run the full unit test suite: `npx vitest run` — expect all `lib/*.test.ts` files green, including the untouched `lib/expense.test.ts`, `lib/folderStorage.test.ts`, `lib/ocr.test.ts`, `lib/summary.test.ts`, `lib/token.test.ts`. (34/34 passed.)
+- [x] Run `next build --webpack` once more from a clean state to confirm the whole app compiles. (Succeeded; `next lint`/`npm run lint` is separately broken — no `eslint.config.js` exists anywhere in the repo — but that's pre-existing and unrelated to this change.)
 - [ ] **Supervising Claude Code session only** (Codex cannot do this — no network access): sign in with a real Google account, exercise the flow end-to-end — add an expense, confirm it lands in a `YYYY-MM` sheet tab with a header row, switch months via the selector, rename the file via the new setting and confirm it takes effect, and if a test account with legacy `Sheet1` data is available, confirm migration runs once and `Sheet1` is removed afterward.
 - [ ] Update `CLAUDE.md`'s "Recent decisions" section (per its own maintenance rule) once verification passes.
+
+## Hardening fixes applied after Codex's implementation
+
+Codex's own read-only review pass (before touching any files) caught a real gap — Task 7's original file-name change would have searched for a file under the new name, not found it, and created a *second* spreadsheet, breaking the "1 file" constraint. That was fixed by adding `renameSpreadsheetFile` + `app/api/file-name/route.ts` before implementation started (see the Task 7 section above, which already reflects this).
+
+After Codex implemented Tasks 1-9 and its own follow-up review pass flagged 4 more issues (major severity, none blocking on data loss but all real correctness gaps), these were fixed directly rather than through another Codex round:
+
+1. **Migration wasn't safe to retry.** `migrateLegacySheetIfPresent` appended legacy rows then deleted the legacy sheet as two separate steps; an interruption between them (or a concurrent request) would re-append already-migrated rows on the next attempt, inflating totals. Fixed by reading each target month sheet's existing rows first and skipping any row that matches on `date|amount|category|memo|method`, and batching all of a month's rows into a single `values.append` call instead of one call per row.
+2. **`ensureMonthSheet` could create a tab with no header.** Creating the tab and writing the header were two separate API calls; if the header write failed after the tab was created, a retry would see the tab already exists and return early, permanently skipping the header. The first real expense would then land in row 1, and reads (which start at `A2`) would silently drop it forever. Fixed by always checking whether `A1:E1` already has a header (regardless of whether the tab needed creating) and writing it via `values.update` (idempotent, fixed range) instead of `values.append` (not idempotent).
+3. **Custom file names could break the Drive search query.** A file name containing a single quote (e.g. `O'Brien`) was interpolated unescaped into the `q:` search string, corrupting the query for every subsequent read/write/rename. Fixed with an `escapeForDriveQuery` helper applied to the file name before it's embedded in the query.
+4. **Stale API responses could overwrite newer dashboard state.** `ExpenseDashboard`'s `fetchMonth` applied whatever response arrived, regardless of request order; rapidly switching months (or saving an expense while a month-switch was in flight) could let an older, slower response overwrite the newer one. Fixed with a `latestRequestId` ref — a response is only applied if it belongs to the most recently issued request.
+
+The full suite (34 tests across 8 files, 18 of them in `lib/sheets.test.ts`) passes with these fixes in place; `next build --webpack` compiles cleanly. `npm run lint` remains broken (no `eslint.config.js` in the repo) — pre-existing, unrelated to this feature.

@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { getSavedFolderId, saveFolderId } from '@/lib/folderStorage';
 
+import FileNameSetting from '@/components/FileNameSetting';
+
 declare const gapi: any;
 declare const google: any;
 
@@ -79,7 +81,7 @@ export function FolderPickerSection({ accessToken, apiKey }: Omit<FolderPickerPr
   }, []);
 
   return (
-    <div className="border-b border-gray-100 px-5 py-4">
+    <div className="flex flex-col gap-3 border-b border-gray-100 px-5 py-4">
       <div className="flex items-center justify-between">
         <div className="flex flex-col gap-0.5">
           <span className="text-[11px] text-gray-400">저장 위치</span>
@@ -98,6 +100,7 @@ export function FolderPickerSection({ accessToken, apiKey }: Omit<FolderPickerPr
           }}
         />
       </div>
+      <FileNameSetting />
     </div>
   );
 }
