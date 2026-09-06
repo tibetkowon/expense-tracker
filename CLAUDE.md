@@ -4,72 +4,185 @@ Personal expense tracker: collects the user's spending and organizes it into a G
 
 ## Key documents
 
-- Design spec: `docs/superpowers/specs/2026-09-01-expense-tracker-design.md` — why manual entry was chosen over automated collection (CODEF/SMS/app-notification paths were all investigated and rejected or deferred — see spec §2 before re-proposing any of them), MVP feature scope, tech stack rationale.
-- Implementation plan: `docs/superpowers/plans/2026-09-01-expense-tracker-mvp.md` — the 8-task MVP build, task-by-task.
-- Future plans/specs follow the same `docs/superpowers/{specs,plans}/YYYY-MM-DD-<topic>.md` convention.
+- Design spec: `docs/superpowers/specs/2026-09-01-expense-tracker-design.md`
+  - Why manual entry was chosen over automated collection.
+  - CODEF/SMS/app-notification paths were investigated and rejected or deferred.
+  - See spec §2 before re-proposing any of them.
+  - Contains MVP scope and tech-stack rationale.
+- Implementation plan: `docs/superpowers/plans/2026-09-01-expense-tracker-mvp.md`
+  - The 8-task MVP build and exact step-level status.
+- Future plans/specs follow:
+  - `docs/superpowers/specs/YYYY-MM-DD-<topic>.md`
+  - `docs/superpowers/plans/YYYY-MM-DD-<topic>.md`
 
 ## Tech stack
 
-- Next.js (App Router, TypeScript), deployed to Vercel
-- No server-side database — Google Sheets (via the signed-in user's own OAuth token) is the only persistent store
-- NextAuth (Auth.js) v5, Google provider, `drive.file` + `spreadsheets` scopes only
-- Vercel AI SDK + AI Gateway for Gemini-based receipt OCR
-- Vitest + Testing Library for tests
+- Next.js App Router + TypeScript, deployed to Vercel.
+- No server-side database.
+- Google Sheets, accessed with the signed-in user's OAuth token, is the only persistent store.
+- NextAuth (Auth.js) v5 with Google provider.
+- OAuth scopes are limited to `drive.file` + `spreadsheets`.
+- Vercel AI SDK + AI Gateway for Gemini-based receipt OCR.
+- Vitest + Testing Library for tests.
 
 ## Development workflow: Claude Code + Codex
 
-This project is built with Claude Code supervising and Codex doing the actual implementation:
+This project uses Claude Code as the supervisor and Codex as the implementation owner.
 
-1. Claude Code turns the current task into a self-contained spec (files, interfaces, steps, definition of done) — see the plan doc for the format.
-2. Codex implements it via `codex:rescue`, running tests/build itself, and returns a self-review (what changed, assumptions, deviations, remaining risks).
-3. Claude Code checks the self-review against the task's definition of done and reports a summary to the user.
-4. If issues surface, Claude Code sends them back to Codex for a follow-up pass before moving on.
+For substantial implementation, bug fixing, refactoring, or test-writing work:
 
-Do not have Claude Code write application code directly under this workflow — that's Codex's job. Claude Code writes/updates specs, plans, and this file.
+1. Claude Code converts the current task into a clear, self-contained request with requirements and definition of done.
+2. Claude Code delegates the implementation through the global `codex-auto` skill.
+3. `codex-auto` owns the implementation → review → fix → re-review → test loop internally.
+4. Claude Code receives only the compact final result.
+5. If the result is `PASS`, Claude Code reports completion without independently repeating the review, re-reading the full diff, or rerunning the same tests.
+6. Claude Code directly investigates only when the result is `NEEDS_DECISION` or `FAIL`.
 
-**Known environment gap:** Codex's sandbox has no network access and can't bind local ports — it cannot run `npm install`, hit the AI Gateway, reach any external API, or run `next build`/`next dev` with Turbopack (Turbopack binds a local port even for a one-shot build; fails with `Operation not permitted`). Codex can fall back to `next build --webpack` to type-check/compile without hitting that wall. For anything that genuinely needs network or a bound port, the supervising Claude Code session runs it after Codex writes the code, then reports results back into the loop. Don't send Codex back to retry a network or Turbopack build — it will hit the same wall every time.
+Do not have Claude Code write application code directly under this workflow. Application code is Codex's responsibility.
 
-**Polling a Codex background job:** `node <codex-companion.mjs path> status <jobId> --json`, condensed via `python3 -c "import json,sys; d=json.load(sys.stdin); print(d['job']['status'], d['job']['phase'], d['job']['elapsed']); [print(p) for p in d['job']['progressPreview']]"`. Fetch the final report with `... result <jobId>` once `status` is `completed`.
+Claude Code may directly write or update:
+- specs
+- plans
+- project documentation
+- this `CLAUDE.md`
 
-**Importing a Claude Design (claude.ai/design) mockup:** the `DesignSync` MCP needs `/design-login`, which requires an interactive terminal this session doesn't have — it'll error out. Ask the user to export a handoff `.zip` from the design and upload it instead. Extract with `python3 -c "import zipfile; ..."`, not `unzip` — Korean filenames get mangled by macOS `unzip`'s default codepage. Keep the relevant `.dc.html` file(s) as committed reference under `docs/superpowers/specs/design/`.
+Do not automatically invoke `/codex:rescue` or `/codex:review` after `codex-auto`.
+
+Do not request or reproduce:
+- raw Codex responses
+- full diffs
+- full command logs
+- full test logs
+- intermediate Codex progress
+
+unless they are specifically needed to troubleshoot a failed or blocked run.
+
+### Codex environment constraints
+
+Codex's sandbox has no network access and cannot bind local ports.
+
+Therefore Codex cannot reliably:
+
+- run `npm install`
+- reach AI Gateway or external APIs
+- run network-dependent integration checks
+- run `next dev`
+- run Turbopack-based commands that require binding a local port
+
+For Next.js compilation/type verification, prefer:
+
+`next build --webpack`
+
+when the normal Turbopack path is blocked by sandbox restrictions.
+
+If verification genuinely requires network access or a bound local port, the supervising Claude Code session may perform that specific verification after Codex finishes.
+
+Do not send Codex back to retry an operation already known to be impossible because of its sandbox restrictions.
+
+## Importing Claude Design mockups
+
+The `DesignSync` MCP requires `/design-login`, which needs an interactive terminal that may not be available in the current session.
+
+If interactive login is unavailable:
+
+1. Ask the user to export a handoff `.zip` from `claude.ai/design`.
+2. Ask the user to upload the zip.
+3. Extract it with Python's `zipfile`, not macOS `unzip`, because Korean filenames may be mangled by the default codepage.
+4. Keep relevant `.dc.html` files as committed references under:
+
+`docs/superpowers/specs/design/`
 
 ## Project memory
 
-- After finishing a task (or a work session), run `claude-md-management:revise-claude-md` to fold in what changed — new decisions, new constraints discovered, anything that would surprise a future session.
-- Keep a **Recent decisions** log below, newest first. Prune entries once they're fully superseded by the spec/plan docs rather than letting this section grow unbounded.
-- Full research history (what was tried and rejected, and why) lives in the spec, not here — link to it rather than duplicating it.
+Keep this file focused on durable information required by future sessions.
+
+Update `CLAUDE.md` only when durable project knowledge changes, such as:
+
+- architecture decisions
+- persistent constraints
+- environment limitations
+- important workflow changes
+- information that would surprise a future session
+
+Do not run CLAUDE.md maintenance automatically after every implementation task or work session.
+
+Routine implementation progress belongs in the relevant plan/status document rather than here.
+
+Keep the **Recent decisions** section:
+- short
+- newest first
+- focused on conclusions rather than investigation history
+
+Prune entries once they are fully represented by the spec or plan.
+
+Full research history, rejected approaches, detailed debugging history, and implementation details belong in the relevant spec/plan document. Link to those documents instead of duplicating the content here.
 
 ## Architecture notes
 
-- `app/page.tsx` is an async server component — it cannot hold `useState` or event handlers. Any UI that needs client state (folder picker, expense form, list refetch, OCR draft values) lives in a dedicated client component (`'use client'`) that owns its own state, e.g. `FolderPickerSection`, `ExpenseDashboard`. Don't try to lift state into `page.tsx` itself.
-- No shared "app state" object — components that need to know things like the picked Drive folder just read it themselves (e.g. `getSavedFolderId()` from `lib/folderStorage.ts`, which wraps `localStorage`) rather than receiving it threaded down through props from a common ancestor.
+- `app/page.tsx` is an async server component and cannot hold `useState` or event handlers.
+- UI requiring client-side state must live in dedicated `'use client'` components.
+- Examples include:
+  - folder picker
+  - expense form
+  - list refetch
+  - OCR draft values
+- Existing examples include `FolderPickerSection` and `ExpenseDashboard`.
+- Do not try to lift client state into `app/page.tsx`.
+- There is no shared global "app state" object.
+- Components that need information such as the selected Drive folder should read it themselves where appropriate.
+- Example: `getSavedFolderId()` from `lib/folderStorage.ts`, which wraps `localStorage`.
 
-## Constraints (do not relax without updating the spec)
+## Constraints
 
-- No database. Sheets is the store.
-- OAuth scope stays at `drive.file` + `spreadsheets` — never request broader Drive access.
-- OCR is auto-draft + human-confirm, never auto-save.
-- Automated collection (CODEF, SMS, email parsing) is deferred, not cancelled — see spec §2/§7 before re-investigating.
+Do not relax these without updating the design spec.
+
+- No database. Google Sheets is the persistent store.
+- OAuth scope remains `drive.file` + `spreadsheets`.
+- Never request broader Google Drive access without an explicit architecture/spec change.
+- OCR is auto-draft + human-confirm.
+- OCR must never auto-save extracted expense data.
+- Automated collection via CODEF, SMS, email parsing, or similar mechanisms is deferred, not cancelled.
+- Review the design spec §2/§7 before re-investigating automated collection.
 
 ## Status
 
-Tasks 1–5 and 8 fully done. Task 8's manual iPhone install check (Step 4) still needs a real device. Task 6 (receipt OCR) is code-complete and unit-tested but **on hold pending a user billing decision** — see below. Task 7 (OCR-to-form integration) is blocked on that same decision since it wires into Task 6's output. See the plan doc's checkboxes for exact step-level status.
+- Tasks 1–5: complete.
+- Task 8: code-complete.
+  - Manual iPhone "Add to Home Screen" verification still requires a real device.
+- Task 6 (receipt OCR):
+  - implementation complete
+  - unit-tested
+  - currently on hold pending a user billing/model decision
+- Task 7 (OCR-to-form integration):
+  - blocked on the same Task 6 billing/model decision
+
+See the implementation plan for exact step-level status.
 
 ## Recent decisions
 
-- 2026-09-04: Task 8 (PWA installability) done — `app/manifest.ts` (Korean name/short_name, standalone display, `#111827` theme) and a `viewport` export in `app/layout.tsx` (this Next.js version — 16.3.4 — deprecates `metadata.themeColor` in favor of a separate `viewport` export; Codex confirmed this against the bundled Next.js docs/types before using it). Icons (`public/icons/icon-{192,512}.png`) were generated by the supervising Claude Code session, not Codex — no local image tool (PIL/ImageMagick) was available, so they were rendered by opening an HTML/CSS page (dark square + white ₩) in Playwright at exact pixel dimensions and screenshotting it, then downsampling to 192px with macOS `sips`. Build confirms `/manifest.webmanifest` is generated as a static route. Manual "Add to Home Screen" verification on a real iPhone (plan Step 4) is still outstanding.
-- 2026-09-03: Task 6 (receipt OCR) implemented and unit-tested (`npm test`, `npx next build --webpack` both pass), but **live use is on hold** — the user chose "OCR 보류" (hold off) rather than resolve AI Gateway billing right now. Root cause of the 500 the user hit while testing: not a code bug — Vercel AI Gateway returns `403 customer_verification_required` until a payment card is on file (needed to unlock the $5/month free credit; confirmed live by reproducing `extractReceiptData` directly with the user's real key, bypassing the browser). Also confirmed via Vercel's docs (`/docs/ai-gateway/pricing`, `/docs/ai-gateway/faq`) and the live `v1/models` catalog: adding a card alone never charges anything — charges only happen on an explicit "top up" purchase or if auto top-up is turned on (off by default) — but `google/gemini-3.5-flash-lite` is NOT in Vercel's free-tier model list, so the $5/month free credit likely can't be spent on it; using it for real would need a small explicit credit purchase (though at $0.30/$2.50 per 1M input/output tokens, real-world cost for personal receipt-photo use is negligible). Revisit this decision — and whether to switch to an actual free-tier model instead — before resuming Task 6/7. `app/api/ocr/route.ts` also has no try/catch around `extractReceiptData`, so any provider-side error currently surfaces as a bare 500 — worth fixing whenever OCR work resumes.
-- 2026-09-03: Task 6 (receipt OCR) done. Re-verifying the plan's `ai` SDK snippets against the installed `ai@7.0.87` surfaced two deprecations since the plan was written: `generateObject` → `generateText` + `Output.object({ schema })` (`{ object }` result becomes `{ output }`), and the `{ type: 'image', image }` message content part → `{ type: 'file', mediaType, data }` (bare base64 string accepted directly as `data`, no data-URL prefix needed). Plan doc's Task 6 snippets were corrected in place before handoff to Codex. Model `google/gemini-3.5-flash-lite` confirmed still current on the AI Gateway.
-- 2026-09-02: Task 5 done — recent list, monthly summary, `ExpenseDashboard`, and the "minimal" visual design from the user's Claude Design handoff applied across the whole screen (restyled `FolderPicker`/`ExpenseForm` too, since the design covers the composition as a whole). Design source: `docs/superpowers/specs/design/ExpenseScreen.dc.html`. Payment method changed from free text to a fixed select; category presets expanded to 9.
-- 2026-09-02: Fixed a real save-failing bug found via manual testing — Google names a new spreadsheet's first tab per account locale ("시트1" for Korean, not "Sheet1"), but the hardcoded `SHEET_RANGE = 'Sheet1!A:E'` assumed English. `findOrCreateSpreadsheet` force-renames the first tab (sheetId 0) to "Sheet1" on both the create AND found-existing paths (idempotent, self-heals). Fully-mocked tests couldn't have caught this — reminder that this class of bug only shows up in real API testing.
-- 2026-09-02: Task 3b (Drive folder picker) added mid-build at user request, fully verified end to end. Revealed `app/page.tsx`'s server-component state limitation (see Architecture notes); also revealed that Drive/Sheets/Picker APIs need explicit enabling in Google Cloud Console — OAuth client creation alone doesn't do it.
+- 2026-09-04: Task 8 PWA implementation completed. `app/manifest.ts`, viewport configuration, and PWA icons are in place. Build verification passed. Real-device iPhone installation verification remains.
+- 2026-09-03: Task 6 receipt OCR is implemented and unit-tested but paused pending the user's AI Gateway billing/model decision. Task 7 is blocked by the same decision. Provider-side OCR errors currently surface as bare 500 responses; improve API error handling when OCR work resumes.
+- 2026-09-03: Task 6 implementation was updated for the installed `ai@7.0.87` API: `generateText` + `Output.object({ schema })` replaces the older `generateObject` approach, and receipt images use file content parts. The implementation plan was corrected accordingly.
+- 2026-09-02: Task 5 completed, including the recent list, monthly summary, `ExpenseDashboard`, and integration of the selected Claude Design handoff.
+- 2026-09-02: Fixed a locale-dependent Google Sheets bug by normalizing the first spreadsheet tab to `Sheet1` on both newly created and existing spreadsheets.
+- 2026-09-02: Task 3b Drive folder picker completed. Drive, Sheets, and Picker APIs must be explicitly enabled in Google Cloud; OAuth client creation alone is insufficient.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
 # This is NOT the Next.js you know
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data.
 
-This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+Before writing Next.js code, read the relevant guide in `node_modules/next/dist/docs/`, resolved from this file's directory. In monorepos, the `next` package may not be visible from the repository root.
+
+Heed deprecation notices.
+
+This block is written and re-added by `next dev`.
+
+Verify its behavior at:
+
+`node_modules/next/dist/server/lib/generate-agent-files.js`
+
+Removing this block from a diff only causes the uncommitted change to be re-created. Committing it with the project keeps the working tree clean.
 
 <!-- END:nextjs-agent-rules -->
