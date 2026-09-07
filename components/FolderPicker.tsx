@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import Toast from '@/components/Toast';
 import { getSavedFolderId, saveFolderId } from '@/lib/folderStorage';
 
 import FileNameSetting from '@/components/FileNameSetting';
@@ -76,6 +77,19 @@ export function FolderPickerSection({ accessToken, apiKey }: Omit<FolderPickerPr
   const [folderId, setFolderId] = useState<string | null>(null);
   const [folderName, setFolderName] = useState<string | null>(null);
 
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (toastTimer.current !== null) clearTimeout(toastTimer.current);
+  }, []);
+
+  function showToast(message: string) {
+    setToastMessage(message);
+    if (toastTimer.current !== null) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToastMessage(null), 1800);
+  }
+
   useEffect(() => {
     setFolderId(getSavedFolderId());
     setFolderName(window.localStorage.getItem(FOLDER_NAME_STORAGE_KEY));
@@ -98,10 +112,12 @@ export function FolderPickerSection({ accessToken, apiKey }: Omit<FolderPickerPr
             window.localStorage.setItem(FOLDER_NAME_STORAGE_KEY, name);
             setFolderId(id);
             setFolderName(name);
+            showToast('저장 위치가 변경되었습니다');
           }}
         />
       </div>
       <FileNameSetting />
+      <Toast message={toastMessage} />
     </div>
   );
 }

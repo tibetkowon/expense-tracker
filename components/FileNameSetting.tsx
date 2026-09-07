@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import Toast from '@/components/Toast';
 import { DEFAULT_FILE_NAME, getSavedFileName, saveFileName } from '@/lib/fileNameStorage';
 import { getSavedFolderId } from '@/lib/folderStorage';
 
@@ -10,6 +11,19 @@ export default function FileNameSetting() {
   const [draft, setDraft] = useState(DEFAULT_FILE_NAME);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (toastTimer.current !== null) clearTimeout(toastTimer.current);
+  }, []);
+
+  function showToast(message: string) {
+    setToastMessage(message);
+    if (toastTimer.current !== null) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToastMessage(null), 1800);
+  }
 
   useEffect(() => {
     const saved = getSavedFileName();
@@ -36,12 +50,19 @@ export default function FileNameSetting() {
         body: JSON.stringify({ folderId, currentFileName: fileName, newFileName: next }),
       });
 
-      if (!response.ok) throw new Error('파일명 변경에 실패했습니다.');
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        const message = typeof body?.error === 'string' && body.error.trim()
+          ? body.error
+          : '파일명 변경에 실패했습니다.';
+        throw new Error(message);
+      }
 
       saveFileName(next);
       setFileName(next);
       setDraft(next);
       setEditing(false);
+      showToast('파일명이 변경되었습니다');
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : '파일명 변경에 실패했습니다.');
       setDraft(fileName);
@@ -65,6 +86,7 @@ export default function FileNameSetting() {
           }}
         />
         {error ? <span className="text-[11px] text-red-500">{error}</span> : null}
+        <Toast message={toastMessage} />
       </div>
     );
   }
@@ -82,6 +104,7 @@ export default function FileNameSetting() {
       >
         변경
       </button>
+      <Toast message={toastMessage} />
     </div>
   );
 }
