@@ -126,7 +126,7 @@ export default function ExpenseForm({
       </label>
       <label className="flex flex-col gap-1 text-[11px] text-gray-400">
         결제수단
-        <select className={fieldClassName} value={method} onChange={(event) => setMethod(event.target.value)} required>
+        <select className={`${fieldClassName} appearance-none leading-normal pr-8 bg-no-repeat bg-[length:16px_16px] bg-[position:right_0.375rem_center] bg-[url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%239ca3af'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='m6%209%206%206%206-6'/%3E%3C/svg%3E")]`} value={method} onChange={(event) => setMethod(event.target.value)} required>
           {method && !payments.includes(method) ? <option value={method}>{method}</option> : null}
           {payments.map((payment) => <option key={payment} value={payment}>{payment}</option>)}
         </select>

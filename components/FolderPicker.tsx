@@ -45,6 +45,7 @@ export default function FolderPicker({ accessToken, apiKey, onPicked }: FolderPi
       .setSelectFolderEnabled(true);
 
     const picker = new google.picker.PickerBuilder()
+      .setTitle('저장 위치 선택')
       .setOAuthToken(accessToken)
       .setDeveloperKey(apiKey)
       .addView(view)
