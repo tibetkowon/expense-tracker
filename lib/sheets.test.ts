@@ -9,6 +9,8 @@ import {
   deleteExpenseRow,
   listAvailableMonths,
   renameSpreadsheetFile,
+  listPaymentMethods,
+  ensurePaymentMethodRegistered,
 } from './sheets';
 
 vi.mock('googleapis', () => {
@@ -322,7 +324,7 @@ describe('빈 기본 시트 정리', () => {
       date: '2026-09-01', amount: 5000, category: '식비', memo: '', method: '카드',
     });
 
-    expect(api.get).toHaveBeenCalledTimes(1);
+    expect(api.get).toHaveBeenCalledTimes(2);
     expect(api.batchUpdate).toHaveBeenNthCalledWith(1, {
       spreadsheetId: 'sheet-id',
       requestBody: { requests: [{ addSheet: { properties: { title: '2026-09' } } }] },
@@ -370,11 +372,12 @@ describe('빈 기본 시트 정리', () => {
   it.each(['read', 'delete'])('동시 정리 중 %s 실패가 나도 이미 삭제됐다면 두 지출을 저장한다', async (failureStage) => {
     const api = (google.sheets as any)().spreadsheets;
     const monthSheet = { properties: { sheetId: 7, title: '2026-09' } };
+    const settingsSheet = { properties: { sheetId: 8, title: '설정' } };
     const initial = { data: { sheets: [
       { properties: { sheetId: 0, title: '시트1' } },
       monthSheet,
     ] } };
-    api.get.mockResolvedValue({ data: { sheets: [monthSheet] } })
+    api.get.mockResolvedValue({ data: { sheets: [monthSheet, settingsSheet] } })
       .mockResolvedValueOnce(initial)
       .mockResolvedValueOnce(initial);
     let finishDeletion!: () => void;
@@ -385,6 +388,8 @@ describe('빈 기본 시트 정리', () => {
     let deleted = false;
     api.values.get.mockImplementation(async ({ range }: { range: string }) => {
       if (range === '2026-09!A1:E1') return { data: { values: [header] } };
+      if (range === "'설정'!A1") return { data: { values: [['결제수단']] } };
+      if (range === "'설정'!A2:A") return { data: { values: [['카드']] } };
       reads += 1;
       if (failureStage === 'read' && reads === 2) {
         await deletionFinished;
@@ -407,7 +412,7 @@ describe('빈 기본 시트 정리', () => {
     ))).resolves.toEqual([undefined, undefined]);
 
     expect(reads).toBe(2);
-    expect(api.get).toHaveBeenCalledTimes(3);
+    expect(api.get).toHaveBeenCalledTimes(5);
     expect(api.batchUpdate).toHaveBeenCalledTimes(failureStage === 'read' ? 1 : 2);
     expect(api.batchUpdate).toHaveBeenCalledWith(deletion);
     expect(api.values.append).toHaveBeenCalledTimes(2);
@@ -575,6 +580,12 @@ describe('updateExpenseRow', () => {
   it.each([2, 7])('overwrites only spreadsheet row %i', async (rowNumber) => {
     const spreadsheets = (google.sheets as any)().spreadsheets;
     spreadsheets.values.update.mockResolvedValue({});
+    spreadsheets.get.mockResolvedValue({ data: { sheets: [
+      { properties: { sheetId: 8, title: '설정' } },
+    ] } });
+    spreadsheets.values.get.mockImplementation(({ range }: { range: string }) =>
+      Promise.resolve({ data: { values: [[range === "'설정'!A1" ? '결제수단' : '현금']] } })
+    );
 
     await updateExpenseRow('token', 'sheet-id', '2026-09', rowNumber, row);
 
@@ -649,5 +660,154 @@ describe('deleteExpenseRow', () => {
     ] } });
     spreadsheets.batchUpdate.mockRejectedValueOnce(new Error('delete failed'));
     await expect(deleteExpenseRow('token', 'sheet-id', '2026-09', 2)).rejects.toThrow('delete failed');
+  });
+});
+
+describe('결제수단 설정', () => {
+  const api = vi.mocked(google.sheets)({ version: 'v4' }).spreadsheets;
+  const settings = { data: { sheets: [
+    { properties: { sheetId: 8, title: '설정' } },
+  ] } };
+  const row = { date: '2026-09-02', amount: 4500, category: '카페', memo: '', method: ' 신한카드 ' };
+
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset().mockResolvedValue(settings as never);
+    vi.mocked(api.batchUpdate).mockReset().mockResolvedValue({} as never);
+    vi.mocked(api.values.get).mockReset().mockResolvedValue({ data: {} } as never);
+    vi.mocked(api.values.update).mockReset().mockResolvedValue({} as never);
+    vi.mocked(api.values.append).mockReset().mockResolvedValue({} as never);
+  });
+
+  it('설정 시트가 없으면 빈 배열을 반환합니다', async () => {
+    vi.mocked(api.get).mockResolvedValue({ data: {} } as never);
+    expect(await listPaymentMethods('token', 'sheet-id')).toEqual([]);
+    expect(api.values.get).not.toHaveBeenCalled();
+    expect(api.batchUpdate).not.toHaveBeenCalled();
+  });
+
+  it('빈 행을 제외하고 원래 값과 순서를 유지합니다', async () => {
+    vi.mocked(api.values.get).mockResolvedValue({
+      data: { values: [['신한카드'], [], [''], [' 현금 '], ['PAY'], ['pay']] },
+    } as never);
+    expect(await listPaymentMethods('token', 'sheet-id'))
+      .toEqual(['신한카드', ' 현금 ', 'PAY', 'pay']);
+    expect(api.values.get).toHaveBeenCalledWith({
+      spreadsheetId: 'sheet-id', range: "'설정'!A2:A",
+    });
+  });
+
+  it('설정 시트가 비어 있으면 기본값을 추가하지 않습니다', async () => {
+    expect(await listPaymentMethods('token', 'sheet-id')).toEqual([]);
+    expect(api.values.append).not.toHaveBeenCalled();
+    expect(api.values.update).not.toHaveBeenCalled();
+  });
+
+  it('설정 시트를 만들고 헤더 다음에 trim한 값을 씁니다', async () => {
+    vi.mocked(api.get).mockResolvedValue({ data: {} } as never);
+    await ensurePaymentMethodRegistered('token', 'sheet-id', row.method);
+    expect(api.batchUpdate).toHaveBeenCalledWith({
+      spreadsheetId: 'sheet-id',
+      requestBody: { requests: [{ addSheet: { properties: { title: '설정' } } }] },
+    });
+    expect(api.values.update).toHaveBeenCalledWith({
+      spreadsheetId: 'sheet-id', range: "'설정'!A1",
+      valueInputOption: 'USER_ENTERED', requestBody: { values: [['결제수단']] },
+    });
+    expect(api.values.append).toHaveBeenCalledWith({
+      spreadsheetId: 'sheet-id', range: "'설정'!A2:A",
+      valueInputOption: 'USER_ENTERED', requestBody: { values: [['신한카드']] },
+    });
+    expect(vi.mocked(api.batchUpdate).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(api.values.update).mock.invocationCallOrder[0]);
+    expect(vi.mocked(api.values.update).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(api.values.append).mock.invocationCallOrder[0]);
+  });
+
+  it('이미 등록된 값은 trim 후 중복 추가하지 않습니다', async () => {
+    vi.mocked(api.values.get).mockResolvedValue({ data: { values: [['신한카드']] } } as never);
+    await ensurePaymentMethodRegistered('token', 'sheet-id', row.method);
+    expect(api.batchUpdate).not.toHaveBeenCalled();
+    expect(api.values.update).not.toHaveBeenCalled();
+    expect(api.values.append).not.toHaveBeenCalled();
+  });
+
+  it('공백뿐인 값은 시트를 읽거나 쓰지 않습니다', async () => {
+    await ensurePaymentMethodRegistered('token', 'sheet-id', '   ');
+    expect(api.get).not.toHaveBeenCalled();
+    expect(api.values.get).not.toHaveBeenCalled();
+    expect(api.batchUpdate).not.toHaveBeenCalled();
+    expect(api.values.append).not.toHaveBeenCalled();
+  });
+
+  it('헤더 쓰기 실패 후 재시도하면 기존 시트의 헤더를 복구합니다', async () => {
+    vi.mocked(api.get).mockResolvedValueOnce({ data: {} } as never);
+    vi.mocked(api.values.update).mockRejectedValueOnce(new Error('헤더 실패'));
+    await expect(ensurePaymentMethodRegistered('token', 'sheet-id', '현금'))
+      .rejects.toThrow('헤더 실패');
+    expect(api.values.append).not.toHaveBeenCalled();
+    await ensurePaymentMethodRegistered('token', 'sheet-id', '현금');
+    expect(api.batchUpdate).toHaveBeenCalledTimes(1);
+    expect(api.values.update).toHaveBeenCalledTimes(2);
+    expect(api.values.append).toHaveBeenCalledTimes(1);
+  });
+
+  it('생성 오류 후 시트가 존재하면 헤더와 값을 씁니다', async () => {
+    vi.mocked(api.get).mockResolvedValueOnce({ data: {} } as never);
+    vi.mocked(api.batchUpdate).mockRejectedValueOnce(new Error('이미 생성됨'));
+    await ensurePaymentMethodRegistered('token', 'sheet-id', '현금');
+    expect(api.values.update).toHaveBeenCalledTimes(1);
+    expect(api.values.append).toHaveBeenCalledTimes(1);
+  });
+
+  it('생성 실패 후에도 시트가 없으면 오류를 전달합니다', async () => {
+    vi.mocked(api.get).mockResolvedValue({ data: {} } as never);
+    vi.mocked(api.batchUpdate).mockRejectedValueOnce(new Error('생성 실패'));
+    await expect(ensurePaymentMethodRegistered('token', 'sheet-id', '현금'))
+      .rejects.toThrow('생성 실패');
+    expect(api.values.update).not.toHaveBeenCalled();
+    expect(api.values.append).not.toHaveBeenCalled();
+  });
+
+  it.each(['append', 'update'] as const)('%s 저장 성공 뒤 해당 결제수단을 등록합니다', async (operation) => {
+    vi.mocked(api.get).mockResolvedValue({ data: { sheets: [
+      ...settings.data.sheets,
+      { properties: { sheetId: 7, title: '2026-09' } },
+    ] } } as never);
+    vi.mocked(api.values.get).mockImplementation((async ({ range }: { range: string }) => ({
+      data: { values: range === "'설정'!A2:A" ? [] : [['헤더']] },
+    })) as never);
+    if (operation === 'append') {
+      await appendExpenseRow('token', 'sheet-id', '2026-09', row);
+    } else {
+      await updateExpenseRow('token', 'sheet-id', '2026-09', 2, row);
+    }
+    expect(api.values.append).toHaveBeenLastCalledWith({
+      spreadsheetId: 'sheet-id', range: "'설정'!A2:A",
+      valueInputOption: 'USER_ENTERED', requestBody: { values: [['신한카드']] },
+    });
+    const write = operation === 'append' ? api.values.append : api.values.update;
+    expect(write).toHaveBeenCalledWith(expect.objectContaining({
+      range: operation === 'append' ? '2026-09!A:E' : '2026-09!A2:E2',
+      requestBody: { values: [[row.date, row.amount, row.category, row.memo, row.method]] },
+    }));
+    expect(vi.mocked(write).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(api.values.append).mock.invocationCallOrder.at(-1)!);
+  });
+
+  it.each(['append', 'update'] as const)('%s 저장 실패 시 등록하지 않습니다', async (operation) => {
+    vi.mocked(api.get).mockResolvedValue({ data: { sheets: [
+      { properties: { sheetId: 7, title: '2026-09' } },
+    ] } } as never);
+    vi.mocked(api.values.get).mockResolvedValue({ data: { values: [['헤더']] } } as never);
+    const write = operation === 'append' ? api.values.append : api.values.update;
+    vi.mocked(write).mockRejectedValueOnce(new Error('저장 실패'));
+    const save = operation === 'append'
+      ? appendExpenseRow('token', 'sheet-id', '2026-09', row)
+      : updateExpenseRow('token', 'sheet-id', '2026-09', 2, row);
+    await expect(save).rejects.toThrow('저장 실패');
+    expect(api.batchUpdate).not.toHaveBeenCalled();
+    expect(api.values.append).not.toHaveBeenCalledWith(expect.objectContaining({
+      range: "'설정'!A2:A",
+    }));
   });
 });

@@ -103,6 +103,75 @@ export async function ensureMonthSheet(
   });
 }
 
+export async function listPaymentMethods(
+  accessToken: string,
+  spreadsheetId: string
+): Promise<string[]> {
+  const auth = authClient(accessToken);
+  const sheetsApi = google.sheets({ version: 'v4', auth });
+  const sheets = await listSheets(sheetsApi, spreadsheetId);
+  if (!sheets.some((sheet) => sheet.title === '설정')) return [];
+
+  const result = await sheetsApi.spreadsheets.values.get({
+    spreadsheetId,
+    range: "'설정'!A2:A",
+  });
+  return (result.data.values ?? [])
+    .map((row) => String(row[0] ?? ''))
+    .filter((method) => method !== '');
+}
+
+export async function ensurePaymentMethodRegistered(
+  accessToken: string,
+  spreadsheetId: string,
+  method: string
+): Promise<void> {
+  const trimmedMethod = method.trim();
+  if (!trimmedMethod) return;
+
+  const auth = authClient(accessToken);
+  const sheetsApi = google.sheets({ version: 'v4', auth });
+  const sheets = await listSheets(sheetsApi, spreadsheetId);
+  if (!sheets.some((sheet) => sheet.title === '설정')) {
+    try {
+      await sheetsApi.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: { requests: [{ addSheet: { properties: { title: '설정' } } }] },
+      });
+    } catch (error) {
+      const currentSheets = await listSheets(sheetsApi, spreadsheetId);
+      if (!currentSheets.some((sheet) => sheet.title === '설정')) throw error;
+    }
+  }
+
+  // 시트 생성 후 헤더 쓰기가 실패해도 다음 호출에서 복구합니다.
+  const header = await sheetsApi.spreadsheets.values.get({
+    spreadsheetId,
+    range: "'설정'!A1",
+  });
+  if ((header.data.values ?? []).length === 0) {
+    await sheetsApi.spreadsheets.values.update({
+      spreadsheetId,
+      range: "'설정'!A1",
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: [['결제수단']] },
+    });
+  }
+
+  const result = await sheetsApi.spreadsheets.values.get({
+    spreadsheetId,
+    range: "'설정'!A2:A",
+  });
+  if ((result.data.values ?? []).some((row) => String(row[0] ?? '') === trimmedMethod)) return;
+
+  await sheetsApi.spreadsheets.values.append({
+    spreadsheetId,
+    range: "'설정'!A2:A",
+    valueInputOption: 'USER_ENTERED',
+    requestBody: { values: [[trimmedMethod]] },
+  });
+}
+
 export async function appendExpenseRow(
   accessToken: string,
   spreadsheetId: string,
@@ -122,6 +191,7 @@ export async function appendExpenseRow(
       values: [[row.date, row.amount, row.category, row.memo, row.method]],
     },
   });
+  await ensurePaymentMethodRegistered(accessToken, spreadsheetId, row.method);
 }
 
 export async function updateExpenseRow(
@@ -141,6 +211,7 @@ export async function updateExpenseRow(
       values: [[row.date, row.amount, row.category, row.memo, row.method]],
     },
   });
+  await ensurePaymentMethodRegistered(accessToken, spreadsheetId, row.method);
 }
 
 export async function deleteExpenseRow(

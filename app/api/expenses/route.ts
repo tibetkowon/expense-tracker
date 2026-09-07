@@ -9,6 +9,7 @@ import {
   updateExpenseRow,
   deleteExpenseRow,
   listAvailableMonths,
+  listPaymentMethods,
 } from '@/lib/sheets';
 import { summarizeByMonth } from '@/lib/summary';
 
@@ -30,6 +31,8 @@ export async function GET(request: Request) {
   const spreadsheetId = await findOrCreateSpreadsheet(session.accessToken, folderId, fileName);
   const availableMonths = await listAvailableMonths(session.accessToken, spreadsheetId);
 
+  const paymentMethods = await listPaymentMethods(session.accessToken, spreadsheetId);
+
   const thisMonth = currentMonth();
   const selectedMonth =
     (requestedMonth && availableMonths.includes(requestedMonth) && requestedMonth) ||
@@ -47,6 +50,9 @@ export async function GET(request: Request) {
     monthlyTotal: total,
     availableMonths,
     selectedMonth,
+    paymentMethods: paymentMethods.length > 0
+      ? paymentMethods
+      : ['체크카드', '신용카드', '현금', '계좌이체'],
   });
 }
 
