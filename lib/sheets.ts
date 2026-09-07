@@ -61,6 +61,31 @@ export async function ensureMonthSheet(
     });
   }
 
+  const residual = sheets.find(
+    (sheet) => sheet.sheetId === 0 && !MONTH_SHEET_TITLE_PATTERN.test(sheet.title)
+  );
+  // 요청한 월 시트가 존재하는 상태에서만 기본 시트를 삭제합니다.
+  if (residual && MONTH_SHEET_TITLE_PATTERN.test(month)) {
+    try {
+      const contents = await sheetsApi.spreadsheets.values.get({
+        spreadsheetId,
+        // 지출 열 밖의 데이터와 빈 문자열을 반환하는 수식도 보존합니다.
+        range: `'${residual.title.replace(/'/g, "''")}'`,
+        valueRenderOption: 'FORMULA',
+      });
+      if ((contents.data.values ?? []).length === 0) {
+        await sheetsApi.spreadsheets.batchUpdate({
+          spreadsheetId,
+          requestBody: { requests: [{ deleteSheet: { sheetId: residual.sheetId } }] },
+        });
+      }
+    } catch (error) {
+      // 다른 요청이 먼저 삭제했다면 정리가 완료된 것이므로 저장을 계속합니다.
+      const currentSheets = await listSheets(sheetsApi, spreadsheetId);
+      if (currentSheets.some((sheet) => sheet.sheetId === residual.sheetId)) throw error;
+    }
+  }
+
   // The tab and its header are two separate API calls, so a retry after a failure
   // between them must not skip the header just because the tab already exists.
   // Writing to the fixed A1:E1 range (rather than appending) keeps this idempotent.

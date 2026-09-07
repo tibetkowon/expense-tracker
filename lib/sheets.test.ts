@@ -167,7 +167,7 @@ describe('findOrCreateSpreadsheet legacy data migration', () => {
     });
     (google.sheets as any)().spreadsheets.values.get.mockImplementation(
       ({ range }: { range: string }) =>
-        range.startsWith('Sheet1!')
+        (range.startsWith('Sheet1!') || range === "'Sheet1'")
           ? Promise.resolve({
               data: {
                 values: [
@@ -224,7 +224,7 @@ describe('findOrCreateSpreadsheet legacy data migration', () => {
     });
     (google.sheets as any)().spreadsheets.values.get.mockImplementation(
       ({ range }: { range: string }) => {
-        if (range === 'Sheet1!A:E' || range === '2026-09!A2:E') {
+        if (range === 'Sheet1!A:E' || range === "'Sheet1'" || range === '2026-09!A2:E') {
           return Promise.resolve({
             data: { values: [['2026-09-01', '12000', '카페', '커피', '카드']] },
           });
@@ -293,6 +293,170 @@ describe('ensureMonthSheet', () => {
       valueInputOption: 'USER_ENTERED',
       requestBody: { values: [['날짜', '금액', '카테고리', '메모', '결제수단']] },
     });
+  });
+});
+
+describe('빈 기본 시트 정리', () => {
+  const header = ['날짜', '금액', '카테고리', '메모', '결제수단'];
+  const deletion = {
+    spreadsheetId: 'sheet-id',
+    requestBody: { requests: [{ deleteSheet: { sheetId: 0 } }] },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    const api = (google.sheets as any)().spreadsheets;
+    api.batchUpdate.mockResolvedValue({});
+    api.values.update.mockResolvedValue({});
+    api.values.append.mockResolvedValue({});
+    api.values.get.mockResolvedValue({ data: {} });
+  });
+
+  it('첫 지출 입력 시 월 시트를 생성한 뒤 빈 기본 시트를 삭제한다', async () => {
+    const api = (google.sheets as any)().spreadsheets;
+    api.get.mockResolvedValue({ data: { sheets: [
+      { properties: { sheetId: 0, title: '시트1' } },
+    ] } });
+
+    await appendExpenseRow('token', 'sheet-id', '2026-09', {
+      date: '2026-09-01', amount: 5000, category: '식비', memo: '', method: '카드',
+    });
+
+    expect(api.get).toHaveBeenCalledTimes(1);
+    expect(api.batchUpdate).toHaveBeenNthCalledWith(1, {
+      spreadsheetId: 'sheet-id',
+      requestBody: { requests: [{ addSheet: { properties: { title: '2026-09' } } }] },
+    });
+    expect(api.batchUpdate).toHaveBeenNthCalledWith(2, deletion);
+    expect(api.values.update).toHaveBeenCalledWith(expect.objectContaining({
+      range: '2026-09!A1:E1', requestBody: { values: [header] },
+    }));
+    expect(api.values.append).toHaveBeenCalledWith(expect.objectContaining({
+      range: '2026-09!A:E',
+      requestBody: { values: [['2026-09-01', 5000, '식비', '', '카드']] },
+    }));
+  });
+
+  it.each([
+    { values: [], shouldDelete: true },
+    { values: [['2026-09-01', 5000, '식비']], shouldDelete: false },
+    { values: [header], shouldDelete: false },
+    { values: [['', '', '', '', '', '보존할 메모']], shouldDelete: false },
+    { values: [['=""']], shouldDelete: false },
+  ])('기존 월 시트가 있을 때 데이터 유무에 따라 정리한다: $shouldDelete', async ({ values, shouldDelete }) => {
+    const api = (google.sheets as any)().spreadsheets;
+    api.get.mockResolvedValue({ data: { sheets: [
+      { properties: { sheetId: 0, title: "사용자 '시트'" } },
+      { properties: { sheetId: 7, title: '2026-09' } },
+    ] } });
+    api.values.get.mockImplementation(({ range }: { range: string }) =>
+      Promise.resolve({ data: { values: range === '2026-09!A1:E1' ? [header] : values } })
+    );
+
+    await ensureMonthSheet('token', 'sheet-id', '2026-09');
+
+    expect(api.values.get).toHaveBeenCalledWith({
+      spreadsheetId: 'sheet-id', range: "'사용자 ''시트'''", valueRenderOption: 'FORMULA',
+    });
+    if (shouldDelete) {
+      expect(api.batchUpdate).toHaveBeenCalledTimes(1);
+      expect(api.batchUpdate).toHaveBeenCalledWith(deletion);
+    } else {
+      expect(api.batchUpdate).not.toHaveBeenCalled();
+    }
+    expect(api.values.update).not.toHaveBeenCalled();
+  });
+
+  it.each(['read', 'delete'])('동시 정리 중 %s 실패가 나도 이미 삭제됐다면 두 지출을 저장한다', async (failureStage) => {
+    const api = (google.sheets as any)().spreadsheets;
+    const monthSheet = { properties: { sheetId: 7, title: '2026-09' } };
+    const initial = { data: { sheets: [
+      { properties: { sheetId: 0, title: '시트1' } },
+      monthSheet,
+    ] } };
+    api.get.mockResolvedValue({ data: { sheets: [monthSheet] } })
+      .mockResolvedValueOnce(initial)
+      .mockResolvedValueOnce(initial);
+    let finishDeletion!: () => void;
+    const deletionFinished = new Promise<void>((resolve) => {
+      finishDeletion = resolve;
+    });
+    let reads = 0;
+    let deleted = false;
+    api.values.get.mockImplementation(async ({ range }: { range: string }) => {
+      if (range === '2026-09!A1:E1') return { data: { values: [header] } };
+      reads += 1;
+      if (failureStage === 'read' && reads === 2) {
+        await deletionFinished;
+        throw new Error('시트가 이미 삭제됨');
+      }
+      return { data: {} };
+    });
+    api.batchUpdate.mockImplementation(async () => {
+      if (deleted) throw new Error('시트가 이미 삭제됨');
+      deleted = true;
+      finishDeletion();
+      return {};
+    });
+    const rows = [5000, 7000].map((amount) => ({
+      date: '2026-09-01', amount, category: '식비', memo: '', method: '카드',
+    }));
+
+    await expect(Promise.all(rows.map((row) =>
+      appendExpenseRow('token', 'sheet-id', '2026-09', row)
+    ))).resolves.toEqual([undefined, undefined]);
+
+    expect(reads).toBe(2);
+    expect(api.get).toHaveBeenCalledTimes(3);
+    expect(api.batchUpdate).toHaveBeenCalledTimes(failureStage === 'read' ? 1 : 2);
+    expect(api.batchUpdate).toHaveBeenCalledWith(deletion);
+    expect(api.values.append).toHaveBeenCalledTimes(2);
+    for (const row of rows) {
+      expect(api.values.append).toHaveBeenCalledWith(expect.objectContaining({
+        range: '2026-09!A:E',
+        requestBody: { values: [[row.date, row.amount, row.category, row.memo, row.method]] },
+      }));
+    }
+  });
+
+  it.each(['read', 'delete', 'recheck'])('정리 중 %s 실패 후 삭제를 확인하지 못하면 오류를 전달한다', async (failureStage) => {
+    const api = (google.sheets as any)().spreadsheets;
+    const initial = { data: { sheets: [
+      { properties: { sheetId: 0, title: '시트1' } },
+      { properties: { sheetId: 7, title: '2026-09' } },
+    ] } };
+    const cleanupError = new Error('정리 실패');
+    const recheckError = new Error('목록 재조회 실패');
+    api.get.mockResolvedValue(initial);
+    if (failureStage === 'read') {
+      api.values.get.mockRejectedValueOnce(cleanupError);
+    } else {
+      api.batchUpdate.mockRejectedValueOnce(cleanupError);
+    }
+    if (failureStage === 'recheck') {
+      api.get.mockResolvedValueOnce(initial).mockRejectedValueOnce(recheckError);
+    }
+
+    await expect(appendExpenseRow('token', 'sheet-id', '2026-09', {
+      date: '2026-09-01', amount: 5000, category: '식비', memo: '', method: '카드',
+    })).rejects.toBe(failureStage === 'recheck' ? recheckError : cleanupError);
+
+    expect(api.get).toHaveBeenCalledTimes(2);
+    expect(api.values.append).not.toHaveBeenCalled();
+    expect(api.values.update).not.toHaveBeenCalled();
+  });
+
+  it('월 시트 생성 실패 시 마지막 기본 시트를 삭제하지 않는다', async () => {
+    const api = (google.sheets as any)().spreadsheets;
+    api.get.mockResolvedValue({ data: { sheets: [
+      { properties: { sheetId: 0, title: '시트1' } },
+    ] } });
+    api.batchUpdate.mockRejectedValueOnce(new Error('생성 실패'));
+
+    await expect(ensureMonthSheet('token', 'sheet-id', '2026-09')).rejects.toThrow('생성 실패');
+
+    expect(api.batchUpdate).not.toHaveBeenCalledWith(deletion);
+    expect(api.values.get).not.toHaveBeenCalled();
   });
 });
 
