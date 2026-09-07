@@ -1,13 +1,20 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import type { ExpenseInput } from '@/lib/expense';
 import { getSavedFolderId } from '@/lib/folderStorage';
 
 import { getSavedFileName } from '@/lib/fileNameStorage';
 
 type ExpenseFormProps = {
-  onSubmitted: (month: string) => void;
+  onSubmitted: (month: string) => void | Promise<void>;
+  editingRowNumber?: number;
+  originalMonth?: string;
+  editFolderId?: string | null;
+  editFileName?: string;
+  onCancelEdit?: () => void;
+  onSubmittingChange?: (submitting: boolean) => void;
+  onEditError?: () => Promise<void>;
   onSuccess?: (message: string) => void;
   initialValues?: Partial<ExpenseInput>;
 };
@@ -23,7 +30,16 @@ export default function ExpenseForm({
   onSubmitted,
   onSuccess,
   initialValues = {},
+  editingRowNumber,
+  originalMonth,
+  editFolderId,
+  editFileName,
+  onCancelEdit,
+  onSubmittingChange,
+  onEditError,
 }: ExpenseFormProps) {
+  const editing = editingRowNumber !== undefined;
+  const submittingRef = useRef(false);
   const [date, setDate] = useState(initialValues.date ?? '');
   const [amount, setAmount] = useState(
     initialValues.amount === undefined ? '' : String(initialValues.amount)
@@ -50,26 +66,38 @@ export default function ExpenseForm({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    onSubmittingChange?.(true);
     setError(null);
     setSubmitting(true);
 
     try {
-      const folderId = getSavedFolderId();
-      const fileName = getSavedFileName();
+      // Editing targets the exact file the edited row was read from (passed down by
+      // the dashboard), not whatever the storage-location picker currently says —
+      // those can drift apart since that picker doesn't share state with this form.
+      const folderId = editing ? (editFolderId ?? getSavedFolderId()) : getSavedFolderId();
+      const fileName = editing ? (editFileName ?? getSavedFileName()) : getSavedFileName();
       const response = await fetch('/api/expenses', {
-        method: 'POST',
+        method: editing ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date, amount: Number(amount), category, memo, method, folderId, fileName }),
+        body: JSON.stringify({
+          date, amount: Number(amount), category, memo, method, folderId, fileName,
+          ...(editing ? { month: originalMonth, rowNumber: editingRowNumber } : {}),
+        }),
       });
 
       if (!response.ok) throw new Error('지출 저장에 실패했습니다.');
 
-      onSubmitted(date.slice(0, 7));
-      onSuccess?.('저장했습니다');
+      await onSubmitted(date.slice(0, 7));
+      onSuccess?.(editing ? '수정했습니다' : '저장했습니다');
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : '지출 저장에 실패했습니다.');
+      if (editing) await onEditError?.();
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
+      onSubmittingChange?.(false);
     }
   }
 
@@ -99,13 +127,19 @@ export default function ExpenseForm({
       <label className="flex flex-col gap-1 text-[11px] text-gray-400">
         결제수단
         <select className={fieldClassName} value={method} onChange={(event) => setMethod(event.target.value)} required>
+          {method && !payments.includes(method) ? <option value={method}>{method}</option> : null}
           {payments.map((payment) => <option key={payment} value={payment}>{payment}</option>)}
         </select>
       </label>
       {error ? <p role="alert" className="text-[12px] text-red-500">{error}</p> : null}
       <button type="submit" disabled={submitting} className="mt-1 w-full rounded-full bg-indigo-600 py-3 text-[14px] font-semibold text-white active:bg-indigo-700 disabled:opacity-60">
-        {submitting ? '저장 중...' : '저장'}
+        {submitting ? '저장 중...' : editing ? '수정 완료' : '저장'}
       </button>
+      {editing ? (
+        <button type="button" disabled={submitting} onClick={onCancelEdit} className="text-[13px] font-semibold text-indigo-600 disabled:text-gray-300">
+          취소
+        </button>
+      ) : null}
     </form>
   );
 }

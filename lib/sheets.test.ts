@@ -5,6 +5,8 @@ import {
   ensureMonthSheet,
   appendExpenseRow,
   readExpenseRows,
+  updateExpenseRow,
+  deleteExpenseRow,
   listAvailableMonths,
   renameSpreadsheetFile,
 } from './sheets';
@@ -339,7 +341,23 @@ describe('readExpenseRows', () => {
       range: '2026-09!A2:E',
     });
     expect(rows).toEqual([
-      { date: '2026-09-01', amount: 12000, category: '식비', memo: '점심', method: '카드' },
+      { date: '2026-09-01', amount: 12000, category: '식비', memo: '점심', method: '카드', rowNumber: 2 },
+    ]);
+  });
+
+  it('preserves actual row numbers across empty rows', async () => {
+    (google.sheets as any)().spreadsheets.values.get.mockResolvedValue({
+      data: { values: [
+        ['2026-09-01', '12000', '식비', '점심', '카드'],
+        [],
+        ['2026-09-02', '3000', '카페'],
+      ] },
+    });
+
+    expect(await readExpenseRows('token', 'sheet-id', '2026-09')).toEqual([
+      { date: '2026-09-01', amount: 12000, category: '식비', memo: '점심', method: '카드', rowNumber: 2 },
+      { date: '', amount: 0, category: '', memo: '', method: '', rowNumber: 3 },
+      { date: '2026-09-02', amount: 3000, category: '카페', memo: '', method: '', rowNumber: 4 },
     ]);
   });
 
@@ -382,5 +400,90 @@ describe('renameSpreadsheetFile', () => {
       fileId: 'sheet-id',
       requestBody: { name: '가계부' },
     });
+  });
+});
+
+describe('updateExpenseRow', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const row = { date: '2026-09-02', amount: 4500, category: '카페', memo: '', method: '현금' };
+
+  it.each([2, 7])('overwrites only spreadsheet row %i', async (rowNumber) => {
+    const spreadsheets = (google.sheets as any)().spreadsheets;
+    spreadsheets.values.update.mockResolvedValue({});
+
+    await updateExpenseRow('token', 'sheet-id', '2026-09', rowNumber, row);
+
+    expect(spreadsheets.values.update).toHaveBeenCalledTimes(1);
+    expect(spreadsheets.values.update).toHaveBeenCalledWith({
+      spreadsheetId: 'sheet-id',
+      range: `2026-09!A${rowNumber}:E${rowNumber}`,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: [['2026-09-02', 4500, '카페', '', '현금']] },
+    });
+    expect(spreadsheets.values.append).not.toHaveBeenCalled();
+    expect(spreadsheets.batchUpdate).not.toHaveBeenCalled();
+  });
+
+  it('propagates an update failure', async () => {
+    (google.sheets as any)().spreadsheets.values.update.mockRejectedValueOnce(new Error('update failed'));
+    await expect(updateExpenseRow('token', 'sheet-id', '2026-09', 2, row)).rejects.toThrow('update failed');
+  });
+});
+
+describe('deleteExpenseRow', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it.each([0, 42])('uses sheet ID %i and deletes a row so later rows shift up', async (sheetId) => {
+    const spreadsheets = (google.sheets as any)().spreadsheets;
+    spreadsheets.get.mockResolvedValue({ data: { sheets: [
+      { properties: { sheetId: 8, title: '2026-08' } },
+      { properties: { sheetId, title: '2026-09' } },
+    ] } });
+    spreadsheets.batchUpdate.mockResolvedValue({});
+
+    await deleteExpenseRow('token', 'sheet-id', '2026-09', 4);
+
+    expect(spreadsheets.get).toHaveBeenCalledWith({ spreadsheetId: 'sheet-id', fields: 'sheets.properties' });
+    expect(spreadsheets.batchUpdate).toHaveBeenCalledTimes(1);
+    expect(spreadsheets.batchUpdate).toHaveBeenCalledWith({
+      spreadsheetId: 'sheet-id',
+      requestBody: { requests: [{ deleteDimension: {
+        range: { sheetId, dimension: 'ROWS', startIndex: 3, endIndex: 4 },
+      } }] },
+    });
+    expect(spreadsheets.values.update).not.toHaveBeenCalled();
+  });
+
+  it('deletes the first data row without deleting the header', async () => {
+    const spreadsheets = (google.sheets as any)().spreadsheets;
+    spreadsheets.get.mockResolvedValue({ data: { sheets: [
+      { properties: { sheetId: 9, title: '2026-09' } },
+    ] } });
+    await deleteExpenseRow('token', 'sheet-id', '2026-09', 2);
+    expect(spreadsheets.batchUpdate).toHaveBeenCalledWith({
+      spreadsheetId: 'sheet-id',
+      requestBody: { requests: [{ deleteDimension: {
+        range: { sheetId: 9, dimension: 'ROWS', startIndex: 1, endIndex: 2 },
+      } }] },
+    });
+  });
+
+  it('throws a clear error without deleting anything when the month is missing', async () => {
+    const spreadsheets = (google.sheets as any)().spreadsheets;
+    spreadsheets.get.mockResolvedValue({ data: { sheets: [
+      { properties: { sheetId: 8, title: '2026-08' } },
+    ] } });
+    await expect(deleteExpenseRow('token', 'sheet-id', '2026-09', 2)).rejects.toThrow('월 시트를 찾을 수 없습니다: 2026-09');
+    expect(spreadsheets.batchUpdate).not.toHaveBeenCalled();
+  });
+
+  it('propagates a delete failure', async () => {
+    const spreadsheets = (google.sheets as any)().spreadsheets;
+    spreadsheets.get.mockResolvedValue({ data: { sheets: [
+      { properties: { sheetId: 9, title: '2026-09' } },
+    ] } });
+    spreadsheets.batchUpdate.mockRejectedValueOnce(new Error('delete failed'));
+    await expect(deleteExpenseRow('token', 'sheet-id', '2026-09', 2)).rejects.toThrow('delete failed');
   });
 });

@@ -9,6 +9,8 @@ export type ExpenseRow = {
   method: string;
 };
 
+export type ExpenseRowWithNumber = ExpenseRow & { rowNumber: number };
+
 function authClient(accessToken: string) {
   const auth = new google.auth.OAuth2();
   auth.setCredentials({ access_token: accessToken });
@@ -97,11 +99,59 @@ export async function appendExpenseRow(
   });
 }
 
+export async function updateExpenseRow(
+  accessToken: string,
+  spreadsheetId: string,
+  month: string,
+  rowNumber: number,
+  row: ExpenseRow
+): Promise<void> {
+  const auth = authClient(accessToken);
+  const sheetsApi = google.sheets({ version: 'v4', auth });
+  await sheetsApi.spreadsheets.values.update({
+    spreadsheetId,
+    range: `${month}!A${rowNumber}:E${rowNumber}`,
+    valueInputOption: 'USER_ENTERED',
+    requestBody: {
+      values: [[row.date, row.amount, row.category, row.memo, row.method]],
+    },
+  });
+}
+
+export async function deleteExpenseRow(
+  accessToken: string,
+  spreadsheetId: string,
+  month: string,
+  rowNumber: number
+): Promise<void> {
+  const auth = authClient(accessToken);
+  const sheetsApi = google.sheets({ version: 'v4', auth });
+  const sheets = await listSheets(sheetsApi, spreadsheetId);
+  const sheet = sheets.find((item) => item.title === month);
+  if (!sheet) throw new Error(`월 시트를 찾을 수 없습니다: ${month}`);
+
+  await sheetsApi.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [{
+        deleteDimension: {
+          range: {
+            sheetId: sheet.sheetId,
+            dimension: 'ROWS',
+            startIndex: rowNumber - 1,
+            endIndex: rowNumber,
+          },
+        },
+      }],
+    },
+  });
+}
+
 export async function readExpenseRows(
   accessToken: string,
   spreadsheetId: string,
   month: string
-): Promise<ExpenseRow[]> {
+): Promise<ExpenseRowWithNumber[]> {
   const auth = authClient(accessToken);
   const sheetsApi = google.sheets({ version: 'v4', auth });
 
@@ -111,7 +161,8 @@ export async function readExpenseRows(
   });
 
   const values = result.data.values ?? [];
-  return values.map((row) => ({
+  return values.map((row, index) => ({
+    rowNumber: index + 2,
     date: String(row[0] ?? ''),
     amount: Number(row[1] ?? 0),
     category: String(row[2] ?? ''),
