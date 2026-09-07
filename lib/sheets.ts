@@ -116,9 +116,10 @@ export async function listPaymentMethods(
     spreadsheetId,
     range: "'설정'!A2:A",
   });
-  return (result.data.values ?? [])
+  const methods = (result.data.values ?? [])
     .map((row) => String(row[0] ?? ''))
     .filter((method) => method !== '');
+  return [...new Set(methods)];
 }
 
 export async function ensurePaymentMethodRegistered(
@@ -191,7 +192,11 @@ export async function appendExpenseRow(
       values: [[row.date, row.amount, row.category, row.memo, row.method]],
     },
   });
-  await ensurePaymentMethodRegistered(accessToken, spreadsheetId, row.method);
+  try {
+    await ensurePaymentMethodRegistered(accessToken, spreadsheetId, row.method);
+  } catch (error) {
+    console.error('결제수단 등록에 실패했습니다:', error);
+  }
 }
 
 export async function updateExpenseRow(
@@ -211,7 +216,11 @@ export async function updateExpenseRow(
       values: [[row.date, row.amount, row.category, row.memo, row.method]],
     },
   });
-  await ensurePaymentMethodRegistered(accessToken, spreadsheetId, row.method);
+  try {
+    await ensurePaymentMethodRegistered(accessToken, spreadsheetId, row.method);
+  } catch (error) {
+    console.error('결제수단 등록에 실패했습니다:', error);
+  }
 }
 
 export async function deleteExpenseRow(

@@ -696,6 +696,15 @@ describe('결제수단 설정', () => {
     });
   });
 
+  it('중복된 결제수단은 처음 등장한 순서대로 한 번만 반환합니다', async () => {
+    vi.mocked(api.values.get).mockResolvedValue({
+      data: { values: [['신한카드'], ['현금'], ['신한카드'], [], [''], ['계좌이체'], ['현금']] },
+    } as never);
+
+    expect(await listPaymentMethods('token', 'sheet-id'))
+      .toEqual(['신한카드', '현금', '계좌이체']);
+  });
+
   it('설정 시트가 비어 있으면 기본값을 추가하지 않습니다', async () => {
     expect(await listPaymentMethods('token', 'sheet-id')).toEqual([]);
     expect(api.values.append).not.toHaveBeenCalled();
@@ -792,6 +801,45 @@ describe('결제수단 설정', () => {
     }));
     expect(vi.mocked(write).mock.invocationCallOrder[0])
       .toBeLessThan(vi.mocked(api.values.append).mock.invocationCallOrder.at(-1)!);
+  });
+
+  it.each(['append', 'update'] as const)('%s 결제수단 등록 실패는 로그만 남기고 저장을 완료합니다', async (operation) => {
+    const error = new Error('결제수단 등록 실패');
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      vi.mocked(api.get).mockResolvedValue({ data: { sheets: [
+        ...settings.data.sheets,
+        { properties: { sheetId: 7, title: '2026-09' } },
+      ] } } as never);
+      vi.mocked(api.values.get).mockImplementation((async ({ range }: { range: string }) => ({
+        data: { values: range === "'설정'!A2:A" ? [] : [['헤더']] },
+      })) as never);
+      // 실제 등록 함수가 설정 시트에 쓰는 단계에서 실패하도록 모킹합니다.
+      vi.mocked(api.values.append).mockImplementation((async ({ range }: { range: string }) => {
+        if (range === "'설정'!A2:A") throw error;
+        return {};
+      }) as never);
+
+      const save = operation === 'append'
+        ? appendExpenseRow('token', 'sheet-id', '2026-09', row)
+        : updateExpenseRow('token', 'sheet-id', '2026-09', 2, row);
+      await expect(save).resolves.toBeUndefined();
+
+      const write = operation === 'append' ? api.values.append : api.values.update;
+      expect(write).toHaveBeenCalledWith(expect.objectContaining({
+        range: operation === 'append' ? '2026-09!A:E' : '2026-09!A2:E2',
+        requestBody: { values: [[row.date, row.amount, row.category, row.memo, row.method]] },
+      }));
+      expect(api.values.append).toHaveBeenLastCalledWith({
+        spreadsheetId: 'sheet-id', range: "'설정'!A2:A",
+        valueInputOption: 'USER_ENTERED', requestBody: { values: [['신한카드']] },
+      });
+      expect(write).toHaveBeenCalledTimes(operation === 'append' ? 2 : 1);
+      expect(consoleError).toHaveBeenCalledTimes(1);
+      expect(consoleError).toHaveBeenCalledWith('결제수단 등록에 실패했습니다:', error);
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   it.each(['append', 'update'] as const)('%s 저장 실패 시 등록하지 않습니다', async (operation) => {
