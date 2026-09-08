@@ -21,7 +21,7 @@ Personal expense tracker: collects the user's spending and organizes it into a G
 - No server-side database.
 - Google Sheets, accessed with the signed-in user's OAuth token, is the only persistent store.
 - NextAuth (Auth.js) v5 with Google provider.
-- OAuth scopes are limited to `drive.file` + `spreadsheets`.
+- OAuth scopes are limited to `drive.file` + `drive.readonly` + `spreadsheets`.
 - Vercel AI SDK + AI Gateway for Gemini-based receipt OCR.
 - Vitest + Testing Library for tests.
 
@@ -137,7 +137,7 @@ Full research history, rejected approaches, detailed debugging history, and impl
 Do not relax these without updating the design spec.
 
 - No database. Google Sheets is the persistent store.
-- OAuth scope remains `drive.file` + `spreadsheets`.
+- OAuth scope remains `drive.file` + `drive.readonly` + `spreadsheets`. `drive.readonly` is only used for read-only folder browsing.
 - Never request broader Google Drive access without an explicit architecture/spec change.
 - OCR is auto-draft + human-confirm.
 - OCR must never auto-save extracted expense data.
