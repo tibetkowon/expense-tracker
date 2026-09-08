@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Toast from '@/components/Toast';
-import { DEFAULT_FILE_NAME, getSavedFileName, saveFileName } from '@/lib/fileNameStorage';
+import { DEFAULT_FILE_NAME, saveFileName } from '@/lib/fileNameStorage';
 import { getSavedFolderId } from '@/lib/folderStorage';
 
 export default function FileNameSetting() {
   const [fileName, setFileName] = useState(DEFAULT_FILE_NAME);
+  const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(DEFAULT_FILE_NAME);
   const [saving, setSaving] = useState(false);
@@ -26,9 +27,28 @@ export default function FileNameSetting() {
   }
 
   useEffect(() => {
-    const saved = getSavedFileName();
-    setFileName(saved);
-    setDraft(saved);
+    const controller = new AbortController();
+    let active = true;
+    async function loadLocation() {
+      try {
+        const response = await fetch('/api/file-location', { signal: controller.signal });
+        if (!response.ok) return;
+        const body = await response.json();
+        if (active && typeof body?.fileName === 'string' && body.fileName.trim()) {
+          setFileName(body.fileName);
+          setDraft(body.fileName);
+        }
+      } catch {
+        // 조회 실패 시 기본 파일명을 유지합니다.
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    void loadLocation();
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, []);
 
   async function commit() {
@@ -99,6 +119,7 @@ export default function FileNameSetting() {
       </div>
       <button
         type="button"
+        disabled={loading}
         onClick={() => setEditing(true)}
         className="text-[13px] font-semibold text-indigo-600"
       >

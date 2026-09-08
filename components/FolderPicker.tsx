@@ -3,11 +3,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { signOut } from 'next-auth/react';
 import Toast from '@/components/Toast';
-import { getSavedFolderId, saveFolderId } from '@/lib/folderStorage';
 
 import FileNameSetting from '@/components/FileNameSetting';
 
-const FOLDER_NAME_STORAGE_KEY = 'expense-tracker:folderName';
 type Folder = { id: string; name: string };
 const ROOT_FOLDER: Folder = { id: 'root', name: '내 드라이브' };
 
@@ -20,6 +18,7 @@ function FolderBrowser({ onPicked, onClose }: FolderPickerProps & { onClose: () 
   const [path, setPath] = useState<Folder[]>([ROOT_FOLDER]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [moving, setMoving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reauthRequired, setReauthRequired] = useState(false);
   const current = path[path.length - 1];
@@ -74,6 +73,32 @@ function FolderBrowser({ onPicked, onClose }: FolderPickerProps & { onClose: () 
     };
   }, [current.id]);
 
+  async function pickFolder() {
+    if (moving) return;
+    setMoving(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/file-location', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folderId: current.id }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(
+          typeof body?.error === 'string' && body.error.trim()
+            ? body.error
+            : '저장 위치 변경에 실패했습니다.'
+        );
+      }
+      onPicked(current.id, current.name);
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : '저장 위치 변경에 실패했습니다.');
+    } finally {
+      setMoving(false);
+    }
+  }
+
   function navigate(nextPath: Folder[]) {
     setLoading(true);
     setError(null);
@@ -88,18 +113,18 @@ function FolderBrowser({ onPicked, onClose }: FolderPickerProps & { onClose: () 
       aria-labelledby="folder-browser-title"
       onCancel={(event) => {
         event.preventDefault();
-        onClose();
+        if (!moving) onClose();
       }}
       className="m-auto max-h-[80dvh] w-[calc(100%-2rem)] max-w-md overflow-y-auto rounded-2xl bg-white p-5 text-gray-800 shadow-xl backdrop:bg-black/40"
     >
       <div className="mb-4 flex items-center justify-between">
         <h2 id="folder-browser-title" className="text-[16px] font-semibold">저장 위치 선택</h2>
-        <button type="button" onClick={onClose} className="p-2 text-[13px] text-gray-500">닫기</button>
+        <button type="button" disabled={moving} onClick={onClose} className="p-2 text-[13px] text-gray-500">닫기</button>
       </div>
       <nav aria-label="폴더 경로" className="mb-3 flex items-center gap-3">
         <button
           type="button"
-          disabled={path.length === 1}
+          disabled={moving || path.length === 1}
           onClick={() => navigate(path.slice(0, -1))}
           className="shrink-0 p-2 text-[13px] font-semibold text-indigo-600 disabled:text-gray-300"
         >
@@ -121,6 +146,7 @@ function FolderBrowser({ onPicked, onClose }: FolderPickerProps & { onClose: () 
               <li key={folder.id}>
                 <button
                   type="button"
+                  disabled={moving}
                   onClick={() => navigate([...path, folder])}
                   className="w-full break-all py-3 text-left text-[14px] active:bg-gray-50"
                 >
@@ -133,11 +159,11 @@ function FolderBrowser({ onPicked, onClose }: FolderPickerProps & { onClose: () 
       ) : null}
       <button
         type="button"
-        disabled={loading || error !== null}
-        onClick={() => onPicked(current.id, current.name)}
+        disabled={moving || loading || error !== null}
+        onClick={() => void pickFolder()}
         className="mt-4 w-full rounded-full bg-indigo-600 px-4 py-3 text-[14px] font-semibold text-white disabled:opacity-40"
       >
-        이 폴더 선택
+        {moving ? '이동 중입니다.' : '이 폴더 선택'}
       </button>
     </dialog>
   );
@@ -169,7 +195,7 @@ export default function FolderPicker({ onPicked }: FolderPickerProps) {
 }
 
 export function FolderPickerSection() {
-  const [folderId, setFolderId] = useState<string | null>(null);
+  const locationChanged = useRef(false);
   const [folderName, setFolderName] = useState<string | null>(null);
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -186,8 +212,25 @@ export function FolderPickerSection() {
   }
 
   useEffect(() => {
-    setFolderId(getSavedFolderId());
-    setFolderName(window.localStorage.getItem(FOLDER_NAME_STORAGE_KEY));
+    const controller = new AbortController();
+    let active = true;
+    async function loadLocation() {
+      try {
+        const response = await fetch('/api/file-location', { signal: controller.signal });
+        if (!response.ok) return;
+        const body = await response.json();
+        if (active && !locationChanged.current && typeof body?.folderName === 'string' && body.folderName.trim()) {
+          setFolderName(body.folderName);
+        }
+      } catch {
+        // 조회 실패 시 기본 위치 안내를 유지합니다.
+      }
+    }
+    void loadLocation();
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, []);
 
   return (
@@ -196,14 +239,12 @@ export function FolderPickerSection() {
         <div className="flex flex-col gap-0.5">
           <span className="text-[11px] text-gray-400">저장 위치</span>
           <span className="text-[14px] font-medium text-gray-800">
-            {folderName ?? (folderId ? `저장된 Drive 폴더 (${folderId})` : 'Drive 루트')}
+            {folderName ?? 'Drive 루트'}
           </span>
         </div>
         <FolderPicker
-          onPicked={(id, name) => {
-            saveFolderId(id);
-            window.localStorage.setItem(FOLDER_NAME_STORAGE_KEY, name);
-            setFolderId(id);
+          onPicked={(_id, name) => {
+            locationChanged.current = true;
             setFolderName(name);
             showToast('저장 위치가 변경되었습니다');
           }}
