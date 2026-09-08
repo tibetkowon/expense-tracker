@@ -25,10 +25,7 @@ export default async function Home() {
               </button>
             </form>
           </div>
-          <FolderPickerSection
-            accessToken={session.accessToken!}
-            apiKey={process.env.NEXT_PUBLIC_GOOGLE_API_KEY!}
-          />
+          <FolderPickerSection />
           <ExpenseDashboard />
         </>
       ) : (

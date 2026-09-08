@@ -1,79 +1,174 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { signOut } from 'next-auth/react';
 import Toast from '@/components/Toast';
 import { getSavedFolderId, saveFolderId } from '@/lib/folderStorage';
 
 import FileNameSetting from '@/components/FileNameSetting';
 
-declare const gapi: any;
-declare const google: any;
-
 const FOLDER_NAME_STORAGE_KEY = 'expense-tracker:folderName';
+type Folder = { id: string; name: string };
+const ROOT_FOLDER: Folder = { id: 'root', name: '내 드라이브' };
 
 type FolderPickerProps = {
-  accessToken: string;
-  apiKey: string;
   onPicked: (folderId: string, folderName: string) => void;
 };
 
-export default function FolderPicker({ accessToken, apiKey, onPicked }: FolderPickerProps) {
-  const [ready, setReady] = useState(false);
+function FolderBrowser({ onPicked, onClose }: FolderPickerProps & { onClose: () => void }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [path, setPath] = useState<Folder[]>([ROOT_FOLDER]);
+  const [folders, setFolders] = useState<Folder[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reauthRequired, setReauthRequired] = useState(false);
+  const current = path[path.length - 1];
 
   useEffect(() => {
-    const loadPicker = () => gapi.load('picker', () => setReady(true));
-
-    if ('gapi' in window) {
-      loadPicker();
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.src = 'https://apis.google.com/js/api.js';
-    script.async = true;
-    script.onload = loadPicker;
-    document.head.appendChild(script);
-
-    return () => {
-      script.onload = null;
-    };
+    const dialog = dialogRef.current!;
+    dialog.showModal();
+    return () => dialog.close();
   }, []);
 
-  const openPicker = () => {
-    const view = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
-      .setIncludeFolders(true)
-      .setMimeTypes('application/vnd.google-apps.folder')
-      .setSelectFolderEnabled(true);
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
 
-    const picker = new google.picker.PickerBuilder()
-      .setTitle('저장 위치 선택')
-      .setOAuthToken(accessToken)
-      .setDeveloperKey(apiKey)
-      .addView(view)
-      .setCallback((data: any) => {
-        if (data.action === google.picker.Action.PICKED) {
-          const doc = data.docs[0];
-          onPicked(doc.id, doc.name);
+    async function loadFolders() {
+      try {
+        const url = current.id === 'root'
+          ? '/api/drive/folders'
+          : `/api/drive/folders?parentId=${encodeURIComponent(current.id)}`;
+        const response = await fetch(url, { signal: controller.signal });
+        const body = await response.json().catch(() => null);
+        if (!active) return;
+        if (!response.ok) {
+          if (response.status === 403 && body?.error === 'REAUTH_REQUIRED') {
+            setReauthRequired(true);
+            setError('다시 로그인하면 사용할 수 있어요');
+            return;
+          }
+          throw new Error(
+            typeof body?.error === 'string' && body.error.trim()
+              ? body.error
+              : '폴더 목록을 불러오지 못했습니다.'
+          );
         }
-      })
-      .build();
+        if (!Array.isArray(body?.folders)) {
+          throw new Error('폴더 목록을 불러오지 못했습니다.');
+        }
+        setFolders(body.folders);
+      } catch (caughtError) {
+        if (active) {
+          setError(caughtError instanceof Error ? caughtError.message : '폴더 목록을 불러오지 못했습니다.');
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
 
-    picker.setVisible(true);
-  };
+    void loadFolders();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [current.id]);
+
+  function navigate(nextPath: Folder[]) {
+    setLoading(true);
+    setError(null);
+    setReauthRequired(false);
+    setFolders([]);
+    setPath(nextPath);
+  }
 
   return (
-    <button
-      type="button"
-      disabled={!ready}
-      onClick={openPicker}
-      className="text-[13px] font-semibold text-indigo-600 disabled:text-gray-300"
+    <dialog
+      ref={dialogRef}
+      aria-labelledby="folder-browser-title"
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      className="m-auto max-h-[80dvh] w-[calc(100%-2rem)] max-w-md overflow-y-auto rounded-2xl bg-white p-5 text-gray-800 shadow-xl backdrop:bg-black/40"
     >
-      변경
-    </button>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 id="folder-browser-title" className="text-[16px] font-semibold">저장 위치 선택</h2>
+        <button type="button" onClick={onClose} className="p-2 text-[13px] text-gray-500">닫기</button>
+      </div>
+      <nav aria-label="폴더 경로" className="mb-3 flex items-center gap-3">
+        <button
+          type="button"
+          disabled={path.length === 1}
+          onClick={() => navigate(path.slice(0, -1))}
+          className="shrink-0 p-2 text-[13px] font-semibold text-indigo-600 disabled:text-gray-300"
+        >
+          뒤로
+        </button>
+        <span className="break-all text-[14px] font-medium">{current.name}</span>
+      </nav>
+      {loading ? <p role="status" className="py-4 text-[13px] text-gray-500">폴더를 불러오는 중입니다.</p> : null}
+      {error ? <p role="alert" className="py-4 text-[13px] text-red-500">{error}</p> : null}
+      {reauthRequired ? (
+        <button type="button" onClick={() => void signOut()} className="py-3 text-[13px] font-semibold text-indigo-600">
+          로그아웃
+        </button>
+      ) : null}
+      {!loading && !error ? (
+        folders.length ? (
+          <ul className="divide-y divide-gray-100">
+            {folders.map((folder) => (
+              <li key={folder.id}>
+                <button
+                  type="button"
+                  onClick={() => navigate([...path, folder])}
+                  className="w-full break-all py-3 text-left text-[14px] active:bg-gray-50"
+                >
+                  {folder.name}
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : <p className="py-4 text-[13px] text-gray-500">하위 폴더가 없습니다.</p>
+      ) : null}
+      <button
+        type="button"
+        disabled={loading || error !== null}
+        onClick={() => onPicked(current.id, current.name)}
+        className="mt-4 w-full rounded-full bg-indigo-600 px-4 py-3 text-[14px] font-semibold text-white disabled:opacity-40"
+      >
+        이 폴더 선택
+      </button>
+    </dialog>
   );
 }
 
-export function FolderPickerSection({ accessToken, apiKey }: Omit<FolderPickerProps, 'onPicked'>) {
+export default function FolderPicker({ onPicked }: FolderPickerProps) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="text-[13px] font-semibold text-indigo-600"
+      >
+        변경
+      </button>
+      {open ? (
+        <FolderBrowser
+          onClose={() => setOpen(false)}
+          onPicked={(id, name) => {
+            onPicked(id, name);
+            setOpen(false);
+          }}
+        />
+      ) : null}
+    </>
+  );
+}
+
+export function FolderPickerSection() {
   const [folderId, setFolderId] = useState<string | null>(null);
   const [folderName, setFolderName] = useState<string | null>(null);
 
@@ -105,8 +200,6 @@ export function FolderPickerSection({ accessToken, apiKey }: Omit<FolderPickerPr
           </span>
         </div>
         <FolderPicker
-          accessToken={accessToken}
-          apiKey={apiKey}
           onPicked={(id, name) => {
             saveFolderId(id);
             window.localStorage.setItem(FOLDER_NAME_STORAGE_KEY, name);
