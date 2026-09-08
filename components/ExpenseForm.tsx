@@ -26,6 +26,14 @@ const categories = [
 const fieldClassName =
   'bg-transparent border-0 border-b border-gray-200 focus:border-indigo-500 outline-none text-[14px] py-1.5 text-gray-800';
 
+function todayLocalDate() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export default function ExpenseForm({
   paymentMethods,
   onSubmitted,
@@ -41,7 +49,7 @@ export default function ExpenseForm({
 }: ExpenseFormProps) {
   const editing = editingRowNumber !== undefined;
   const submittingRef = useRef(false);
-  const [date, setDate] = useState(initialValues.date ?? '');
+  const [date, setDate] = useState(() => initialValues.date ?? todayLocalDate());
   const [amount, setAmount] = useState(
     initialValues.amount === undefined ? '' : String(initialValues.amount)
   );
@@ -52,7 +60,7 @@ export default function ExpenseForm({
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    setDate(initialValues.date ?? '');
+    setDate(initialValues.date ?? todayLocalDate());
     setAmount(initialValues.amount === undefined ? '' : String(initialValues.amount));
     setCategory(initialValues.category ?? '');
     setMemo(initialValues.memo ?? '');

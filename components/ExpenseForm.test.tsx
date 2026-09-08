@@ -21,6 +21,55 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('날짜 기본값', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 0, 2, 0, 30));
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it('새 지출의 날짜를 로컬 기준 오늘 날짜로 채웁니다', () => {
+    render(<ExpenseForm paymentMethods={[]} onSubmitted={vi.fn()} />);
+
+    expect(screen.getByLabelText('날짜')).toHaveValue('2026-01-02');
+  });
+
+  it('UTC 날짜와 다른 한국 자정 직후에도 로컬 날짜를 사용합니다', () => {
+    vi.setSystemTime(new Date('2026-01-01T15:30:00Z'));
+    // 실행 환경의 타임존과 무관하게 KST의 로컬 날짜 값을 재현합니다.
+    vi.spyOn(Date.prototype, 'getFullYear').mockReturnValue(2026);
+    vi.spyOn(Date.prototype, 'getMonth').mockReturnValue(0);
+    vi.spyOn(Date.prototype, 'getDate').mockReturnValue(2);
+
+    render(<ExpenseForm paymentMethods={[]} onSubmitted={vi.fn()} />);
+
+    expect(screen.getByLabelText('날짜')).toHaveValue('2026-01-02');
+  });
+
+  it('수정 시 원래 날짜를 유지하고 새 입력으로 전환하면 오늘 날짜를 채웁니다', () => {
+    const onSubmitted = vi.fn();
+    const { rerender } = render(
+      <ExpenseForm
+        paymentMethods={[]}
+        onSubmitted={onSubmitted}
+        editingRowNumber={2}
+        originalMonth="2025-12"
+        initialValues={{ date: '2025-12-25' }}
+      />
+    );
+
+    expect(screen.getByLabelText('날짜')).toHaveValue('2025-12-25');
+
+    rerender(<ExpenseForm paymentMethods={[]} onSubmitted={onSubmitted} />);
+
+    expect(screen.getByLabelText('날짜')).toHaveValue('2026-01-02');
+  });
+});
+
 describe('결제수단 자동완성', () => {
   it('전달받은 결제수단을 순서대로 자동완성 옵션에 표시합니다', () => {
     const paymentMethods = ['삼성카드', '현금', '신한카드'];
