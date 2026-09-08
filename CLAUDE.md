@@ -150,11 +150,10 @@ Do not relax these without updating the design spec.
 - Task 8: code-complete.
   - Manual iPhone "Add to Home Screen" verification still requires a real device.
 - Task 6 (receipt OCR):
-  - implementation complete
-  - unit-tested
-  - currently on hold pending a user billing/model decision
+  - implementation complete, unit-tested
+  - billing/model decision made 2026-09-08: switch from AI Gateway to a direct Google AI Studio API key (user has recurring GCP credit to apply). Not yet implemented — see `docs/superpowers/plans/2026-09-08-ocr-google-ai-studio-switch.md` for the exact code changes and manual setup steps to pick up next.
 - Task 7 (OCR-to-form integration):
-  - blocked on the same Task 6 billing/model decision
+  - blocked on Task 6's provider switch landing first
 
 See the implementation plan for exact step-level status.
 
