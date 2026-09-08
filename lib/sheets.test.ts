@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { google } from 'googleapis';
 import {
   findOrCreateSpreadsheet,
+  getSpreadsheetLocation,
+  moveSpreadsheetFile,
   ensureMonthSheet,
   appendExpenseRow,
   readExpenseRows,
@@ -16,6 +18,7 @@ import {
 vi.mock('googleapis', () => {
   const files = {
     list: vi.fn(),
+    get: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
   };
@@ -35,6 +38,127 @@ vi.mock('googleapis', () => {
       sheets: vi.fn(() => ({ spreadsheets })),
     },
   };
+});
+
+describe('정식 파일 식별 및 위치 관리', () => {
+  const files = google.drive({ version: 'v3' }).files;
+  const spreadsheets = google.sheets({ version: 'v4' }).spreadsheets;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(files.list).mockReset().mockResolvedValue({ data: { files: [] } } as never);
+    vi.mocked(files.get).mockReset();
+    vi.mocked(files.create).mockReset().mockResolvedValue({ data: { id: 'new-id' } } as never);
+    vi.mocked(files.update).mockReset().mockResolvedValue({} as never);
+    vi.mocked(spreadsheets.get).mockReset().mockResolvedValue({
+      data: { sheets: [{ properties: { sheetId: 1, title: '2026-09' } }] },
+    } as never);
+  });
+
+  it('폴더와 파일명 힌트와 무관하게 마커 파일을 반환합니다', async () => {
+    vi.mocked(files.list).mockResolvedValueOnce({
+      data: { files: [{ id: 'canonical-id' }, { id: 'other-id' }] },
+    } as never);
+
+    expect(await findOrCreateSpreadsheet('token', 'different-folder', '다른 이름'))
+      .toBe('canonical-id');
+    expect(files.list).toHaveBeenCalledTimes(1);
+    expect(files.list).toHaveBeenCalledWith({
+      q: "appProperties has { key='expenseTrackerCanonical' and value='true' } and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false",
+      fields: 'files(id, name)',
+      spaces: 'drive',
+    });
+    expect(files.create).not.toHaveBeenCalled();
+    expect(files.update).not.toHaveBeenCalled();
+    expect(spreadsheets.get).toHaveBeenCalledWith({
+      spreadsheetId: 'canonical-id', fields: 'sheets.properties',
+    });
+  });
+
+  it('폴백으로 찾은 파일에 마커를 붙이고 기존 시트 마이그레이션을 확인합니다', async () => {
+    vi.mocked(files.list)
+      .mockResolvedValueOnce({ data: { files: [] } } as never)
+      .mockResolvedValueOnce({ data: { files: [{ id: 'legacy-id' }] } } as never);
+
+    expect(await findOrCreateSpreadsheet('token', 'folder-123', '가계부')).toBe('legacy-id');
+    expect(files.list).toHaveBeenCalledTimes(2);
+    expect(files.list).toHaveBeenNthCalledWith(2, {
+      q: "name='가계부' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false and 'folder-123' in parents",
+      fields: 'files(id, name)',
+      spaces: 'drive',
+    });
+    expect(files.update).toHaveBeenCalledWith({
+      fileId: 'legacy-id',
+      requestBody: { appProperties: { expenseTrackerCanonical: 'true' } },
+    });
+    expect(spreadsheets.get).toHaveBeenCalledWith({
+      spreadsheetId: 'legacy-id', fields: 'sheets.properties',
+    });
+    expect(files.create).not.toHaveBeenCalled();
+  });
+
+  it('두 검색 모두 실패하면 힌트 위치와 이름으로 마커가 있는 파일을 만듭니다', async () => {
+    expect(await findOrCreateSpreadsheet('token', 'folder-123', '가계부')).toBe('new-id');
+    expect(files.list).toHaveBeenCalledTimes(2);
+    expect(files.create).toHaveBeenCalledWith({
+      requestBody: {
+        name: '가계부',
+        mimeType: 'application/vnd.google-apps.spreadsheet',
+        appProperties: { expenseTrackerCanonical: 'true' },
+        parents: ['folder-123'],
+      },
+      fields: 'id',
+    });
+    expect(files.update).not.toHaveBeenCalled();
+  });
+
+  it('폴백 쿼리의 폴더 ID도 이스케이프합니다', async () => {
+    await findOrCreateSpreadsheet('token', "folder'123");
+    expect(files.list).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      q: expect.stringContaining("'folder\\'123' in parents"),
+    }));
+  });
+
+  it.each([undefined, [], ['root']])('부모가 %j이면 내 드라이브를 반환합니다', async (parents) => {
+    vi.mocked(files.get).mockResolvedValueOnce({
+      data: { name: '가계부', parents },
+    } as never);
+    expect(await getSpreadsheetLocation('token', 'sheet-id')).toEqual({
+      folderId: 'root', folderName: '내 드라이브', fileName: '가계부',
+    });
+    expect(files.get).toHaveBeenCalledTimes(1);
+    expect(files.get).toHaveBeenCalledWith({ fileId: 'sheet-id', fields: 'name,parents' });
+  });
+
+  it('실제 부모 폴더의 이름을 조회합니다', async () => {
+    vi.mocked(files.get)
+      .mockResolvedValueOnce({ data: { name: '가계부', parents: ['folder-id'] } } as never)
+      .mockResolvedValueOnce({ data: { name: '생활비' } } as never);
+    expect(await getSpreadsheetLocation('token', 'sheet-id')).toEqual({
+      folderId: 'folder-id', folderName: '생활비', fileName: '가계부',
+    });
+    expect(files.get).toHaveBeenCalledTimes(2);
+    expect(files.get).toHaveBeenNthCalledWith(1, { fileId: 'sheet-id', fields: 'name,parents' });
+    expect(files.get).toHaveBeenNthCalledWith(2, { fileId: 'folder-id', fields: 'name' });
+  });
+
+  it.each([
+    { parents: ['old-1', 'old-2'], removeParents: 'old-1,old-2' },
+    { parents: undefined, removeParents: '' },
+  ])('현재 부모 $removeParents를 제거하고 새 폴더로 이동합니다', async ({ parents, removeParents }) => {
+    vi.mocked(files.get).mockResolvedValueOnce({ data: { parents } } as never);
+    await expect(moveSpreadsheetFile('token', 'sheet-id', 'new-folder')).resolves.toBeUndefined();
+    expect(files.get).toHaveBeenCalledWith({ fileId: 'sheet-id', fields: 'parents' });
+    expect(files.update).toHaveBeenCalledTimes(1);
+    expect(files.update).toHaveBeenCalledWith({
+      fileId: 'sheet-id',
+      addParents: 'new-folder',
+      removeParents,
+      fields: 'id, parents',
+    });
+    expect(vi.mocked(files.get).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(files.update).mock.invocationCallOrder[0]);
+  });
 });
 
 describe('findOrCreateSpreadsheet', () => {

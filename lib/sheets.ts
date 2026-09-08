@@ -299,7 +299,18 @@ export async function findOrCreateSpreadsheet(
   const auth = authClient(accessToken);
   const drive = google.drive({ version: 'v3', auth });
 
-  const folderClause = folderId ? ` and '${folderId}' in parents` : '';
+  const canonical = await drive.files.list({
+    q: "appProperties has { key='expenseTrackerCanonical' and value='true' } and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false",
+    fields: 'files(id, name)',
+    spaces: 'drive',
+  });
+  const canonicalFile = canonical.data.files?.[0];
+  if (canonicalFile?.id) {
+    await migrateLegacySheetIfPresent(accessToken, canonicalFile.id);
+    return canonicalFile.id;
+  }
+
+  const folderClause = folderId ? ` and '${escapeForDriveQuery(folderId)}' in parents` : '';
   const existing = await drive.files.list({
     q: `name='${escapeForDriveQuery(fileName)}' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false${folderClause}`,
     fields: 'files(id, name)',
@@ -308,6 +319,10 @@ export async function findOrCreateSpreadsheet(
 
   const found = existing.data.files?.[0];
   if (found?.id) {
+    await drive.files.update({
+      fileId: found.id,
+      requestBody: { appProperties: { expenseTrackerCanonical: 'true' } },
+    });
     await migrateLegacySheetIfPresent(accessToken, found.id);
     return found.id;
   }
@@ -316,6 +331,7 @@ export async function findOrCreateSpreadsheet(
     requestBody: {
       name: fileName,
       mimeType: 'application/vnd.google-apps.spreadsheet',
+      appProperties: { expenseTrackerCanonical: 'true' },
       ...(folderId ? { parents: [folderId] } : {}),
     },
     fields: 'id',
@@ -323,6 +339,48 @@ export async function findOrCreateSpreadsheet(
 
   if (!created.data.id) throw new Error('Failed to create spreadsheet');
   return created.data.id;
+}
+
+export async function getSpreadsheetLocation(
+  accessToken: string,
+  spreadsheetId: string
+): Promise<{ folderId: string; folderName: string; fileName: string }> {
+  const auth = authClient(accessToken);
+  const drive = google.drive({ version: 'v3', auth });
+  const file = await drive.files.get({
+    fileId: spreadsheetId,
+    fields: 'name,parents',
+  });
+  const fileName = file.data.name ?? '';
+  const parentId = file.data.parents?.[0];
+  if (!parentId || parentId === 'root') {
+    return { folderId: 'root', folderName: '내 드라이브', fileName };
+  }
+
+  const folder = await drive.files.get({
+    fileId: parentId,
+    fields: 'name',
+  });
+  return { folderId: parentId, folderName: folder.data.name ?? '', fileName };
+}
+
+export async function moveSpreadsheetFile(
+  accessToken: string,
+  spreadsheetId: string,
+  newFolderId: string
+): Promise<void> {
+  const auth = authClient(accessToken);
+  const drive = google.drive({ version: 'v3', auth });
+  const file = await drive.files.get({
+    fileId: spreadsheetId,
+    fields: 'parents',
+  });
+  await drive.files.update({
+    fileId: spreadsheetId,
+    addParents: newFolderId,
+    removeParents: (file.data.parents ?? []).join(','),
+    fields: 'id, parents',
+  });
 }
 
 async function readLegacyRows(
