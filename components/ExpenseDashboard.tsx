@@ -14,6 +14,7 @@ type ExpensesResponse = {
   expenses: ExpenseRowWithNumber[];
   monthlyTotal: number;
   availableMonths: string[];
+  paymentMethods: string[];
   selectedMonth: string;
 };
 
@@ -40,6 +41,9 @@ export default function ExpenseDashboard() {
   const formSection = useRef<HTMLElement>(null);
   const [monthlyTotal, setMonthlyTotal] = useState(0);
   const [availableMonths, setAvailableMonths] = useState<string[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<string[]>([
+    '체크카드', '신용카드', '현금', '계좌이체',
+  ]);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth());
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -71,6 +75,7 @@ export default function ExpenseDashboard() {
       setDataSource({ folderId, fileName });
       setMonthlyTotal(data.monthlyTotal);
       setAvailableMonths(data.availableMonths);
+      setPaymentMethods(data.paymentMethods);
       setSelectedMonth(data.selectedMonth);
     } catch {
       if (requestId === latestRequestId.current) {
@@ -134,6 +139,7 @@ export default function ExpenseDashboard() {
           <h2 className="mb-4 text-[13px] font-semibold text-gray-800">{editingExpense ? '지출 수정' : '지출 입력'}</h2>
           <ExpenseForm
             key={editingExpense ? `${editingExpense.month}-${editingExpense.rowNumber}` : 'new'}
+            paymentMethods={paymentMethods}
             initialValues={editingExpense ?? undefined}
             editingRowNumber={editingExpense?.rowNumber}
             originalMonth={editingExpense?.month}

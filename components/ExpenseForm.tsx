@@ -7,6 +7,7 @@ import { getSavedFolderId } from '@/lib/folderStorage';
 import { getSavedFileName } from '@/lib/fileNameStorage';
 
 type ExpenseFormProps = {
+  paymentMethods: string[];
   onSubmitted: (month: string) => void | Promise<void>;
   editingRowNumber?: number;
   originalMonth?: string;
@@ -22,11 +23,11 @@ type ExpenseFormProps = {
 const categories = [
   '식비', '카페', '교통', '쇼핑', '구독서비스', '의료', '선물', '문화생활', '기타',
 ];
-const payments = ['체크카드', '신용카드', '현금', '계좌이체'];
 const fieldClassName =
   'bg-transparent border-0 border-b border-gray-200 focus:border-indigo-500 outline-none text-[14px] py-1.5 text-gray-800';
 
 export default function ExpenseForm({
+  paymentMethods,
   onSubmitted,
   onSuccess,
   initialValues = {},
@@ -126,10 +127,10 @@ export default function ExpenseForm({
       </label>
       <label className="flex flex-col gap-1 text-[11px] text-gray-400">
         결제수단
-        <select className={`${fieldClassName} appearance-none leading-normal pr-8 bg-no-repeat bg-[length:16px_16px] bg-[position:right_0.375rem_center] bg-[url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%239ca3af'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='m6%209%206%206%206-6'/%3E%3C/svg%3E")]`} value={method} onChange={(event) => setMethod(event.target.value)} required>
-          {method && !payments.includes(method) ? <option value={method}>{method}</option> : null}
-          {payments.map((payment) => <option key={payment} value={payment}>{payment}</option>)}
-        </select>
+        <input className={fieldClassName} type="text" list="expense-payment-method-options" value={method} onChange={(event) => setMethod(event.target.value)} required />
+        <datalist id="expense-payment-method-options">
+          {paymentMethods.map((m) => <option key={m} value={m} />)}
+        </datalist>
       </label>
       {error ? <p role="alert" className="text-[12px] text-red-500">{error}</p> : null}
       <button type="submit" disabled={submitting} className="mt-1 w-full rounded-full bg-indigo-600 py-3 text-[14px] font-semibold text-white active:bg-indigo-700 disabled:opacity-60">
