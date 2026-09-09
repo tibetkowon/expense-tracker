@@ -7,7 +7,23 @@ export default async function Home() {
 
   return (
     <main className="flex h-full min-h-screen w-full flex-col overflow-y-auto bg-white pt-[54px]">
-      {session?.user ? (
+      {session?.user && session.error === 'RefreshTokenError' ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 px-5">
+          <p role="alert" className="text-center text-[14px] text-gray-700">
+            Google 연결이 만료되었습니다. 다시 동의하여 연결을 복구해 주세요.
+          </p>
+          <form
+            action={async () => {
+              'use server';
+              await signIn('google', {}, { prompt: 'consent' });
+            }}
+          >
+            <button type="submit" className="rounded-full bg-indigo-600 px-6 py-3 text-[14px] font-semibold text-white active:bg-indigo-700">
+              Google 다시 연결
+            </button>
+          </form>
+        </div>
+      ) : session?.user ? (
         <>
           <div className="flex items-center justify-between border-b border-gray-100 px-5 pb-4">
             <div className="flex flex-col">
