@@ -146,13 +146,13 @@ Do not relax these without updating the design spec.
 
 ## Status
 
-- Tasks 1–5: complete.
+- Tasks 1–7: complete.
 - Task 8: code-complete.
   - Manual iPhone "Add to Home Screen" verification still requires a real device.
 - Task 6 (receipt OCR):
   - implementation complete, unit-tested, and now running on Vertex AI direct (`@ai-sdk/google-vertex`, service account auth) instead of AI Gateway/AI Studio — see `docs/superpowers/plans/2026-09-15-ocr-vertex-ai-switch.md`. Live-verified against the real Vertex AI endpoint on 2026-09-15 (not just unit tests). `GOOGLE_VERTEX_LOCATION` must be `global`, not a specific region — `gemini-3.5-flash-lite` isn't served from `us-central1`.
-- Task 7 (OCR-to-form integration):
-  - unblocked — Task 6's provider switch has landed
+  - Vercel production/preview environment variables (`GOOGLE_VERTEX_PROJECT`, `GOOGLE_VERTEX_LOCATION`, `GOOGLE_VERTEX_CREDENTIALS`) are registered.
+- Task 7 (OCR-to-form integration): complete (2026-09-15). `components/ReceiptUpload.tsx` pre-fills `ExpenseForm` from `/api/ocr`; user still reviews and submits manually. An in-progress edit always wins over an OCR draft.
 
 See the implementation plan for exact step-level status.
 

@@ -1197,7 +1197,7 @@ git commit -m "feat: receipt OCR via Gemini through AI Gateway"
 - Consumes: `ReceiptExtraction` type and `POST /api/ocr` from Task 6; `<ExpenseForm initialValues={...} />` from Task 4; `<ExpenseDashboard />` from Task 5
 - Produces: `<ReceiptUpload onExtracted={(data: ReceiptExtraction) => void} />`
 
-- [ ] **Step 1: Write the failing component test**
+- [x] **Step 1: Write the failing component test**
 
 Create `components/ReceiptUpload.test.tsx`:
 
@@ -1232,30 +1232,30 @@ describe('ReceiptUpload', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run components/ReceiptUpload.test.tsx`
 Expected: FAIL — `components/ReceiptUpload.tsx` does not exist yet
 
-- [ ] **Step 3: Implement the component**
+- [x] **Step 3: Implement the component**
 
 Create `components/ReceiptUpload.tsx` — a client component with a labeled file input (`<label htmlFor="receipt-input">영수증 사진</label>`) that, on file selection, reads the file as base64 (via `FileReader`), `POST`s `{ imageBase64 }` to `/api/ocr`, and calls `onExtracted(json)` with the parsed response. Show a loading state while the request is in flight and an inline error if it fails.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run components/ReceiptUpload.test.tsx`
 Expected: PASS
 
-- [ ] **Step 5: Wire it into the dashboard**
+- [x] **Step 5: Wire it into the dashboard**
 
 In `components/ExpenseDashboard.tsx`, render `<ReceiptUpload onExtracted={setDraftValues} />` above `<ExpenseForm initialValues={draftValues} ... />`, where `draftValues` is state on `ExpenseDashboard` (which is already a client component per Task 5) that starts empty and gets replaced by the OCR result. The user still has to review/submit the form — OCR only pre-fills it (per spec §3, "auto-draft, human confirms").
 
-- [ ] **Step 6: Run full test suite and build**
+- [x] **Step 6: Run full test suite and build**
 
 Run: `npm test && npm run build`
 Expected: all tests pass, build succeeds
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add -A
