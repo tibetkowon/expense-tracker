@@ -13,6 +13,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'imageBase64 is required' }, { status: 400 });
   }
 
-  const extraction = await extractReceiptData(imageBase64);
-  return NextResponse.json(extraction);
+  try {
+    const extraction = await extractReceiptData(imageBase64);
+    return NextResponse.json(extraction);
+  } catch {
+    return NextResponse.json(
+      { error: '영수증 인식 중 서버 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' },
+      { status: 500 }
+    );
+  }
 }

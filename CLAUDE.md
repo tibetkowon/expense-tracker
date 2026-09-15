@@ -150,10 +150,9 @@ Do not relax these without updating the design spec.
 - Task 8: code-complete.
   - Manual iPhone "Add to Home Screen" verification still requires a real device.
 - Task 6 (receipt OCR):
-  - implementation complete, unit-tested
-  - billing/provider decision updated 2026-09-15 (supersedes the 2026-09-08 AI Studio decision, which turned out to rest on a wrong assumption — see Recent decisions below): switch from AI Gateway to Vertex AI direct (`@ai-sdk/google-vertex`, service account auth), to actually use the user's recurring GCP credit. Not yet implemented — see `docs/superpowers/plans/2026-09-15-ocr-vertex-ai-switch.md` for the exact code changes and manual setup steps to pick up next.
+  - implementation complete, unit-tested, and now running on Vertex AI direct (`@ai-sdk/google-vertex`, service account auth) instead of AI Gateway/AI Studio — see `docs/superpowers/plans/2026-09-15-ocr-vertex-ai-switch.md`. Live-verified against the real Vertex AI endpoint on 2026-09-15 (not just unit tests). `GOOGLE_VERTEX_LOCATION` must be `global`, not a specific region — `gemini-3.5-flash-lite` isn't served from `us-central1`.
 - Task 7 (OCR-to-form integration):
-  - blocked on Task 6's provider switch landing first
+  - unblocked — Task 6's provider switch has landed
 
 See the implementation plan for exact step-level status.
 

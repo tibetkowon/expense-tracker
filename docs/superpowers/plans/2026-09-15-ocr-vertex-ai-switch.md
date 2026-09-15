@@ -1,8 +1,14 @@
 # OCR: AI Studio 계획 폐기 → Vertex AI 직접 연결로 전환 (다음 세션 재개용 메모)
 
 - 날짜: 2026-09-15
-- 상태: 결정만 됨, 구현 미착수 — 다음에 이어서 진행
+- **상태: 구현 완료, 실제 Vertex AI 호출로 검증 완료.**
 - 이 문서는 `docs/superpowers/plans/2026-09-08-ocr-google-ai-studio-switch.md`를 대체한다 (그 문서의 결정은 폐기).
+
+## 구현 후 확인된 사항 (다음 세션 참고)
+
+- **`GOOGLE_VERTEX_LOCATION`은 `us-central1`이 아니라 `global`로 설정해야 한다.** 처음엔 `us-central1`로 시도했으나 `gemini-3.5-flash-lite`가 해당 리전에서 "Publisher model ... was not found" 에러를 냈다 — 신규 Gemini 모델은 출시 초기에 특정 리전이 아니라 global 엔드포인트에서만 서빙되는 경우가 흔하다. 설치된 `@ai-sdk/google-vertex@5.0.82`는 `location: "global"`을 올바르게 처리한다 (더 옛날 버전에는 이 부분에 알려진 버그가 있었음 — vercel/ai#6811).
+- 서비스 계정 인증(`GOOGLE_VERTEX_CREDENTIALS` JSON) 자체는 문제없이 바로 동작했다.
+- Claude Code 세션이 `lib/ocr.ts`의 `extractReceiptData`를 실제 이미지(더미 JPEG)로 직접 호출해 Vertex AI 응답을 받는 것까지 확인함 (2026-09-15).
 
 ## 왜 계획이 바뀌었나
 

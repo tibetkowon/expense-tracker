@@ -1,3 +1,4 @@
+import { createVertex } from '@ai-sdk/google-vertex';
 import { generateText, Output } from 'ai';
 import { z } from 'zod';
 
@@ -14,8 +15,16 @@ const ReceiptSchema = z.object({
 export type ReceiptExtraction = z.infer<typeof ReceiptSchema>;
 
 export async function extractReceiptData(imageBase64: string): Promise<ReceiptExtraction> {
+  const vertex = createVertex({
+    project: process.env.GOOGLE_VERTEX_PROJECT,
+    location: process.env.GOOGLE_VERTEX_LOCATION,
+    googleAuthOptions: {
+      credentials: JSON.parse(process.env.GOOGLE_VERTEX_CREDENTIALS!),
+    },
+  });
+
   const { output } = await generateText({
-    model: 'google/gemini-3.5-flash-lite',
+    model: vertex('gemini-3.5-flash-lite'),
     output: Output.object({ schema: ReceiptSchema }),
     messages: [
       {
