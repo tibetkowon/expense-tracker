@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ExpenseRowWithNumber } from '@/lib/sheets';
+import type { ExpenseInput } from '@/lib/expense';
+import type { ReceiptExtraction } from '@/lib/ocr';
+import { ReceiptUpload } from '@/components/ReceiptUpload';
 import { getSavedFolderId } from '@/lib/folderStorage';
 import { DEFAULT_FILE_NAME, getSavedFileName } from '@/lib/fileNameStorage';
 import ExpenseForm from '@/components/ExpenseForm';
@@ -34,6 +37,23 @@ export default function ExpenseDashboard() {
     fileName: DEFAULT_FILE_NAME,
   });
   const [editingExpense, setEditingExpense] = useState<(ExpenseRowWithNumber & { month: string }) | null>(null);
+  const [draftValues, setDraftValues] = useState<ReceiptExtraction | null>(null);
+  const [ocrGeneration, setOcrGeneration] = useState(0);
+  const latestOcrGeneration = useRef(0);
+
+  function clearReceiptDraft() {
+    setOcrGeneration(++latestOcrGeneration.current);
+    setDraftValues(null);
+  }
+
+  const draftValuesAsPartialExpenseInput: Partial<ExpenseInput> | null = draftValues
+    ? {
+        ...(draftValues.date !== null ? { date: draftValues.date } : {}),
+        ...(draftValues.amount !== null ? { amount: draftValues.amount } : {}),
+        ...(draftValues.categoryGuess !== null ? { category: draftValues.categoryGuess } : {}),
+        ...(draftValues.merchant !== null ? { memo: draftValues.merchant } : {}),
+      }
+    : null;
   const [mutating, setMutating] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -135,19 +155,27 @@ export default function ExpenseDashboard() {
           />
         </div>
         <MonthlySummary total={monthlyTotal} month={selectedMonth} />
+        <ReceiptUpload onExtracted={(data) => {
+          // 사진 선택 시 전달된 콜백의 세대를 확인해 초기화 이전 응답을 무시합니다.
+          if (ocrGeneration !== latestOcrGeneration.current) return;
+          setDraftValues(data);
+        }} />
         <section ref={formSection} className="border-b border-gray-100 px-5 py-6">
           <h2 className="mb-4 text-[13px] font-semibold text-gray-800">{editingExpense ? '지출 수정' : '지출 입력'}</h2>
           <ExpenseForm
             key={editingExpense ? `${editingExpense.month}-${editingExpense.rowNumber}` : 'new'}
             paymentMethods={paymentMethods}
-            initialValues={editingExpense ?? undefined}
+            initialValues={editingExpense ?? draftValuesAsPartialExpenseInput ?? undefined}
             editingRowNumber={editingExpense?.rowNumber}
             originalMonth={editingExpense?.month}
             editFolderId={dataSource.folderId}
             editFileName={dataSource.fileName}
             onCancelEdit={() => setEditingExpense(null)}
             onSubmittingChange={setMutating}
-            onSubmitted={fetchMonth}
+            onSubmitted={async (month) => {
+              clearReceiptDraft();
+              await fetchMonth(month);
+            }}
             onEditError={async () => {
               showToast('수정에 실패했습니다. 내역을 다시 확인해 주세요.');
               await fetchMonth(selectedMonth);
@@ -158,6 +186,7 @@ export default function ExpenseDashboard() {
         <ExpenseList
           expenses={expenses}
           onEdit={(expense) => {
+            clearReceiptDraft();
             setEditingExpense({ ...expense, month: selectedMonth });
             formSection.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }}
