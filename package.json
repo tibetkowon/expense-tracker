@@ -11,6 +11,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@ai-sdk/google-vertex": "^5.0.82",
     "ai": "latest",
     "googleapis": "latest",
     "next": "latest",
