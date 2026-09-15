@@ -1,7 +1,8 @@
 # OCR: AI Gateway → Google AI Studio 직접 연결 전환 (다음 세션 재개용 메모)
 
 - 날짜: 2026-09-08
-- 상태: 결정만 됨, 구현 미착수 — 다음에 이어서 진행
+- **상태: 폐기됨 (2026-09-15) — 후속 문서 `docs/superpowers/plans/2026-09-15-ocr-vertex-ai-switch.md` 참고.**
+  - 이 계획이 전제로 삼았던 "AI Studio에서 GCP 월간 크레딧을 바로 쓸 수 있다"는 가정이 틀린 것으로 확인됨 (AI Studio는 Prepay 모델이라 Cloud Billing 크레딧으로 충전 불가). 크레딧이 실제로 적용되는 Vertex AI로 전환하기로 결정.
 - 배경: 2026-09-08 세 번째 피드백 라운드 항목 3("결제내역 인식 기능 설계"). Task 6(영수증 OCR)은 이미 구현/단위테스트 완료 상태로 `AI_GATEWAY_API_KEY` 빌링 결정 때문에 보류돼 있었음(`docs/superpowers/plans/2026-09-01-expense-tracker-mvp.md` Task 6/7, `CLAUDE.md` Status 섹션). 이번에 그 결정을 내림: Vercel AI Gateway 대신 Google AI Studio API 키로 직접 연결한다.
 
 ## 결정 사항
