@@ -14,6 +14,10 @@ type ExpenseFormProps = {
   editFolderId?: string | null;
   editFileName?: string;
   onCancelEdit?: () => void;
+  confirmingPendingRowNumber?: number;
+  confirmFolderId?: string | null;
+  confirmFileName?: string;
+  onCancelConfirm?: () => void;
   onSubmittingChange?: (submitting: boolean) => void;
   onEditError?: () => Promise<void>;
   onSuccess?: (message: string) => void;
@@ -44,10 +48,15 @@ export default function ExpenseForm({
   editFolderId,
   editFileName,
   onCancelEdit,
+  confirmingPendingRowNumber,
+  confirmFolderId,
+  confirmFileName,
+  onCancelConfirm,
   onSubmittingChange,
   onEditError,
 }: ExpenseFormProps) {
   const editing = editingRowNumber !== undefined;
+  const confirming = confirmingPendingRowNumber !== undefined;
   const submittingRef = useRef(false);
   const [date, setDate] = useState(() => initialValues.date ?? todayLocalDate());
   const [amount, setAmount] = useState(
@@ -85,14 +94,17 @@ export default function ExpenseForm({
       // Editing targets the exact file the edited row was read from (passed down by
       // the dashboard), not whatever the storage-location picker currently says —
       // those can drift apart since that picker doesn't share state with this form.
-      const folderId = editing ? (editFolderId ?? getSavedFolderId()) : getSavedFolderId();
-      const fileName = editing ? (editFileName ?? getSavedFileName()) : getSavedFileName();
-      const response = await fetch('/api/expenses', {
+      const folderId = editing ? (editFolderId ?? getSavedFolderId())
+        : confirming ? (confirmFolderId ?? getSavedFolderId()) : getSavedFolderId();
+      const fileName = editing ? (editFileName ?? getSavedFileName())
+        : confirming ? (confirmFileName ?? getSavedFileName()) : getSavedFileName();
+      const response = await fetch(confirming ? '/api/pending/confirm' : '/api/expenses', {
         method: editing ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           date, amount: Number(amount), category, memo, method, folderId, fileName,
           ...(editing ? { month: originalMonth, rowNumber: editingRowNumber } : {}),
+          ...(confirming ? { pendingRowNumber: confirmingPendingRowNumber } : {}),
         }),
       });
 
@@ -144,8 +156,8 @@ export default function ExpenseForm({
       <button type="submit" disabled={submitting} className="mt-1 w-full rounded-full bg-indigo-600 py-3 text-[14px] font-semibold text-white active:bg-indigo-700 disabled:opacity-60">
         {submitting ? '저장 중...' : editing ? '수정 완료' : '저장'}
       </button>
-      {editing ? (
-        <button type="button" disabled={submitting} onClick={onCancelEdit} className="text-[13px] font-semibold text-indigo-600 disabled:text-gray-300">
+      {editing || confirming ? (
+        <button type="button" disabled={submitting} onClick={editing ? onCancelEdit : onCancelConfirm} className="text-[13px] font-semibold text-indigo-600 disabled:text-gray-300">
           취소
         </button>
       ) : null}

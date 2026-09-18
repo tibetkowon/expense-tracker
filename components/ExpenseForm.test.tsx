@@ -111,3 +111,52 @@ describe('결제수단 자동완성', () => {
     });
   });
 });
+
+describe('확인 대기 저장', () => {
+  it('확인 대상 파일과 행 번호로 POST하고 수정 필드는 보내지 않습니다', async () => {
+    fetchMock.mockResolvedValue({ ok: true });
+    const onSubmitted = vi.fn();
+    render(
+      <ExpenseForm
+        paymentMethods={[]}
+        onSubmitted={onSubmitted}
+        confirmingPendingRowNumber={4}
+        confirmFolderId="pending-folder"
+        confirmFileName="알림 가계부"
+        initialValues={{ date: '2026-09-18', amount: 4500, category: '카페', memo: '커피', method: '신한카드' }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+
+    await waitFor(() => expect(onSubmitted).toHaveBeenCalledWith('2026-09'));
+    expect(fetchMock).toHaveBeenCalledWith('/api/pending/confirm', expect.objectContaining({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    }));
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      date: '2026-09-18', amount: 4500, category: '카페', memo: '커피', method: '신한카드',
+      folderId: 'pending-folder', fileName: '알림 가계부', pendingRowNumber: 4,
+    });
+  });
+
+  it('확인 취소 콜백을 호출하고 저장하지 않습니다', () => {
+    const onCancelConfirm = vi.fn();
+    const onCancelEdit = vi.fn();
+    render(
+      <ExpenseForm
+        paymentMethods={[]}
+        onSubmitted={vi.fn()}
+        confirmingPendingRowNumber={2}
+        onCancelConfirm={onCancelConfirm}
+        onCancelEdit={onCancelEdit}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '취소' }));
+
+    expect(onCancelConfirm).toHaveBeenCalledOnce();
+    expect(onCancelEdit).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
