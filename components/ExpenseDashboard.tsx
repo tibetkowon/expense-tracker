@@ -12,6 +12,7 @@ import ExpenseList from '@/components/ExpenseList';
 import MonthlySummary from '@/components/MonthlySummary';
 import MonthSelector from '@/components/MonthSelector';
 import Toast from '@/components/Toast';
+import ShortcutLinkButton from '@/components/ShortcutLinkButton';
 
 type ExpensesResponse = {
   expenses: ExpenseRowWithNumber[];
@@ -146,6 +147,7 @@ export default function ExpenseDashboard() {
 
   return (
     <>
+      <ShortcutLinkButton showToast={showToast} />
       <fieldset disabled={mutating || loading} className="min-w-0">
         <div className="flex items-center justify-between px-5 pt-4">
           <MonthSelector

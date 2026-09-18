@@ -17,6 +17,25 @@ function authClient(accessToken: string) {
   return auth;
 }
 
+export async function shareSpreadsheetWithServiceAccount(
+  accessToken: string,
+  spreadsheetId: string,
+  serviceAccountEmail: string
+): Promise<void> {
+  const auth = authClient(accessToken);
+  const drive = google.drive({ version: 'v3', auth });
+
+  await drive.permissions.create({
+    fileId: spreadsheetId,
+    sendNotificationEmail: false,
+    requestBody: {
+      type: 'user',
+      role: 'writer',
+      emailAddress: serviceAccountEmail,
+    },
+  });
+}
+
 const HEADER_ROW = ['날짜', '금액', '카테고리', '메모', '결제수단'];
 const MONTH_SHEET_TITLE_PATTERN = /^\d{4}-\d{2}$/;
 

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { google } from 'googleapis';
 import {
   findOrCreateSpreadsheet,
+  shareSpreadsheetWithServiceAccount,
   getSpreadsheetLocation,
   moveSpreadsheetFile,
   ensureMonthSheet,
@@ -16,6 +17,7 @@ import {
 } from './sheets';
 
 vi.mock('googleapis', () => {
+  const permissions = { create: vi.fn() };
   const files = {
     list: vi.fn(),
     get: vi.fn(),
@@ -34,10 +36,46 @@ vi.mock('googleapis', () => {
   return {
     google: {
       auth: { OAuth2: vi.fn(function OAuth2() { return { setCredentials: vi.fn() }; }) },
-      drive: vi.fn(() => ({ files })),
+      drive: vi.fn(() => ({ files, permissions })),
       sheets: vi.fn(() => ({ spreadsheets })),
     },
   };
+});
+
+describe('서비스 계정 공유', () => {
+  const permissions = google.drive({ version: 'v3' }).permissions;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(permissions.create).mockReset().mockResolvedValue({} as never);
+  });
+
+  it('사용자 OAuth로 서비스 계정에 알림 없이 편집 권한을 부여합니다', async () => {
+    await expect(shareSpreadsheetWithServiceAccount(
+      'token', 'sheet-id', 'shortcuts@example.com'
+    )).resolves.toBeUndefined();
+
+    const oauth = vi.mocked(google.auth.OAuth2).mock.results[0].value;
+    expect(oauth.setCredentials).toHaveBeenCalledWith({ access_token: 'token' });
+    expect(google.drive).toHaveBeenCalledWith({ version: 'v3', auth: oauth });
+    expect(permissions.create).toHaveBeenCalledTimes(1);
+    expect(permissions.create).toHaveBeenCalledWith({
+      fileId: 'sheet-id',
+      sendNotificationEmail: false,
+      requestBody: {
+        type: 'user',
+        role: 'writer',
+        emailAddress: 'shortcuts@example.com',
+      },
+    });
+  });
+
+  it('공유 실패를 호출자에게 전달합니다', async () => {
+    vi.mocked(permissions.create).mockRejectedValueOnce(new Error('공유 실패'));
+    await expect(shareSpreadsheetWithServiceAccount(
+      'token', 'sheet-id', 'shortcuts@example.com'
+    )).rejects.toThrow('공유 실패');
+  });
 });
 
 describe('정식 파일 식별 및 위치 관리', () => {
