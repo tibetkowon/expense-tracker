@@ -86,11 +86,14 @@ describe('단축어 알림 파싱 API', () => {
     expect(mocks.extractNotificationData).not.toHaveBeenCalled();
   });
 
-  it('입금은 서비스 계정 조회와 저장 없이 건너뜁니다', async () => {
-    mocks.extractNotificationData.mockResolvedValue({ ...extraction, type: '입금' });
+  it.each([
+    ['입금', 'deposit'],
+    ['무관', 'not_transaction'],
+  ])('%s은 서비스 계정 조회와 저장 없이 건너뜁니다', async (type, reason) => {
+    mocks.extractNotificationData.mockResolvedValue({ ...extraction, type });
     const response = await POST(request());
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ ok: true, skipped: true, reason: 'deposit' });
+    expect(await response.json()).toEqual({ ok: true, skipped: true, reason });
     expect(mocks.getServiceAccountAuth).not.toHaveBeenCalled();
     expect(mocks.findServiceAccountSpreadsheetId).not.toHaveBeenCalled();
     expect(mocks.appendPendingRow).not.toHaveBeenCalled();

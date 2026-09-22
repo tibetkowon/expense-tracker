@@ -34,8 +34,12 @@ export async function POST(request: Request) {
     );
   }
 
-  if (extraction.type === '입금') {
-    return NextResponse.json({ ok: true, skipped: true, reason: 'deposit' });
+  if (extraction.type === '입금' || extraction.type === '무관') {
+    return NextResponse.json({
+      ok: true,
+      skipped: true,
+      reason: extraction.type === '입금' ? 'deposit' : 'not_transaction',
+    });
   }
   const pendingType: '결제' | '취소' = extraction.type === '취소' ? '취소' : '결제';
 

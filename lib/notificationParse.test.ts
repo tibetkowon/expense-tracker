@@ -74,7 +74,7 @@ describe('extractNotificationData', () => {
     expect(result).toEqual(output);
   });
 
-  it.each(['결제', '입금', '취소', null] as const)(
+  it.each(['결제', '입금', '취소', '무관', null] as const)(
     '거래 유형 %s와 일부 null 필드를 가공하지 않고 전달한다',
     async (type) => {
       const output = {
