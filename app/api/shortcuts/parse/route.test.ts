@@ -21,7 +21,6 @@ const auth = {};
 const rawText = '  카드 승인 12,000원\n가맹점  ';
 const extraction = {
   type: '결제',
-  date: '2026-09-18',
   amount: 12000,
   merchant: '가맹점',
   categoryGuess: '식비',
@@ -43,13 +42,18 @@ function request(
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-09-17T15:00:00.000Z'));
   vi.stubEnv('SHORTCUT_API_KEY', 'test-api-key');
   mocks.getServiceAccountAuth.mockReturnValue(auth);
   mocks.findServiceAccountSpreadsheetId.mockResolvedValue('sheet-id');
   mocks.extractNotificationData.mockResolvedValue(extraction);
   mocks.appendPendingRow.mockResolvedValue(undefined);
 });
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllEnvs();
+});
 
 describe('단축어 알림 파싱 API', () => {
   it.each([null, '', 'wrong-key'])('키가 없거나 틀리면 401을 반환합니다: %s', async (key) => {
@@ -112,13 +116,47 @@ describe('단축어 알림 파싱 API', () => {
     });
   });
 
+  it.each([
+    ['2026-12-31T14:59:59.999Z', '2026-12-31'],
+    ['2026-12-31T15:00:00.000Z', '2027-01-01'],
+  ])('연도 없는 알림도 수신 시각 %s의 KST 날짜로 저장합니다', async (timestamp, date) => {
+    vi.setSystemTime(new Date(timestamp));
+    const text = '카드 승인 12,000원 12/31 13:09 가맹점';
+
+    expect((await POST(request({ appName: '신한카드', text }))).status).toBe(200);
+    expect(mocks.appendPendingRow).toHaveBeenCalledExactlyOnceWith(
+      auth, 'sheet-id', expect.objectContaining({ date, rawText: text })
+    );
+  });
+
+  it('본문 읽기와 모델 처리 중 KST 연도가 바뀌어도 수신 날짜를 저장합니다', async () => {
+    vi.setSystemTime(new Date('2026-12-31T14:59:59.999Z'));
+    const incoming = request();
+    incoming.json = vi.fn(async () => {
+      vi.setSystemTime(new Date('2026-12-31T15:00:00.000Z'));
+      return { appName: '신한카드', text: rawText };
+    });
+    mocks.extractNotificationData.mockImplementation(async () => {
+      vi.setSystemTime(new Date('2026-12-31T15:00:10.000Z'));
+      return extraction;
+    });
+
+    expect((await POST(incoming)).status).toBe(200);
+    expect(mocks.appendPendingRow).toHaveBeenCalledExactlyOnceWith(
+      auth, 'sheet-id', expect.objectContaining({
+        date: '2026-12-31',
+        rawText,
+      })
+    );
+  });
+
   it('모든 필드가 불명확해도 원문을 보존한 결제 초안을 저장합니다', async () => {
     mocks.extractNotificationData.mockResolvedValue({
-      type: null, date: null, amount: null, merchant: null, categoryGuess: null, method: null,
+      type: null, amount: null, merchant: null, categoryGuess: null, method: null,
     });
     expect((await POST(request())).status).toBe(200);
     expect(mocks.appendPendingRow).toHaveBeenCalledExactlyOnceWith(auth, 'sheet-id', {
-      date: '', amount: 0, category: '', memo: '', method: '', type: '결제', rawText,
+      date: '2026-09-18', amount: 0, category: '', memo: '', method: '', type: '결제', rawText,
     });
   });
 

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { extractNotificationData } from '@/lib/notificationParse';
 import { appendPendingRow } from '@/lib/pending';
+import { formatSeoulDate } from '@/lib/seoulDate';
 import {
   findServiceAccountSpreadsheetId,
   getServiceAccountAuth,
@@ -13,6 +14,8 @@ const bodySchema = z.object({
 });
 
 export async function POST(request: Request) {
+  // 본문 읽기나 모델 응답을 기다리는 동안 자정이 지나도 수신 날짜를 유지한다.
+  const receivedDate = formatSeoulDate(new Date());
   const apiKey = process.env.SHORTCUT_API_KEY;
   if (!apiKey || request.headers.get('x-shortcut-api-key') !== apiKey) {
     return NextResponse.json({ error: '인증에 실패했습니다.' }, { status: 401 });
@@ -53,7 +56,7 @@ export async function POST(request: Request) {
       );
     }
     await appendPendingRow(auth, spreadsheetId, {
-      date: extraction.date ?? '',
+      date: receivedDate,
       amount: extraction.amount ?? 0,
       category: extraction.categoryGuess ?? '',
       memo: extraction.merchant ?? '',
