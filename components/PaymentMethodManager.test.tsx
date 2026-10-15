@@ -1,0 +1,41 @@
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import PaymentMethodManager from './PaymentMethodManager';
+const mocks = vi.hoisted(() => ({ folder: 'first', file: 'old', fetch: vi.fn() }));
+vi.mock('@/lib/folderStorage', () => ({ getSavedFolderId: () => mocks.folder }));
+vi.mock('@/lib/fileNameStorage', () => ({ getSavedFileName: () => mocks.file }));
+beforeEach(() => {
+  mocks.folder = 'first'; mocks.file = 'old'; mocks.fetch.mockReset();
+  vi.stubGlobal('fetch', mocks.fetch);
+  mocks.fetch.mockImplementation(async (_url, options) => ({ ok: true, json: async () => options ? { replacedCount: 4 } : { entries: [{ name: '카드', aliases: ['1234'] }] } }));
+});
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+it('처음에는 접혀 있고 펼칠 때 조회하며 수정은 조회 당시 파일을 사용합니다', async () => {
+  const changed = vi.fn(); render(<PaymentMethodManager onChanged={changed} />);
+  expect(mocks.fetch).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: /결제수단 관리/ }));
+  await screen.findByText('카드 · 1234');
+  mocks.folder = 'second'; mocks.file = 'new';
+  fireEvent.click(screen.getByRole('button', { name: '카드 수정' }));
+  fireEvent.change(screen.getByLabelText('결제수단 이름'), { target: { value: '새 카드' } });
+  fireEvent.click(screen.getByRole('button', { name: '수정 저장' }));
+  await screen.findByText('4건의 기록도 함께 수정했어요');
+  const body = JSON.parse(mocks.fetch.mock.calls.find(([, options]) => options?.method === 'PATCH')![1].body);
+  expect(body).toMatchObject({ folderId: 'first', fileName: 'old', originalName: '카드', name: '새 카드', aliases: ['1234'] });
+  await waitFor(() => expect(changed).toHaveBeenCalled());
+});
+it('추가와 삭제를 제공하고 삭제 확인에 기록 보존을 명시합니다', async () => {
+  vi.spyOn(window, 'confirm').mockReturnValue(true);
+  render(<PaymentMethodManager onChanged={vi.fn()} />);
+  fireEvent.click(screen.getByRole('button', { name: /결제수단 관리/ }));
+  await screen.findByText('카드 · 1234');
+  fireEvent.change(screen.getByLabelText('결제수단 이름'), { target: { value: '현금' } });
+  fireEvent.click(screen.getByRole('button', { name: '추가' }));
+  await screen.findByText('추가했습니다');
+  await waitFor(() => expect(screen.getByRole('button', { name: '카드 삭제' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: '카드 삭제' }));
+  expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('기존 지출 기록은 그대로 유지'));
+  await screen.findByText('삭제했습니다');
+  expect(mocks.fetch.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(true);
+  expect(mocks.fetch.mock.calls.some(([, options]) => options?.method === 'DELETE')).toBe(true);
+});

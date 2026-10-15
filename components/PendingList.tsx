@@ -1,18 +1,31 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import type { PendingRowWithNumber } from '@/lib/pending';
 
 type PendingListProps = {
   items: PendingRowWithNumber[];
+  loading?: boolean;
   onConfirmPayment: (item: PendingRowWithNumber) => void;
   onDismiss: (item: PendingRowWithNumber) => void | Promise<void>;
 };
 
-export default function PendingList({ items, onConfirmPayment, onDismiss }: PendingListProps) {
-  if (items.length === 0) return null;
+export default function PendingList({ items, loading = false, onConfirmPayment, onDismiss }: PendingListProps) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    try { setOpen(localStorage.getItem('pending-list-open') === 'true'); }
+    catch { setOpen(false); }
+  }, []);
+  function toggle() {
+    const next = !open;
+    setOpen(next);
+    try { localStorage.setItem('pending-list-open', String(next)); } catch { /* 메모리 상태만 사용합니다. */ }
+  }
 
   return (
     <section className="border-b border-gray-100 px-5 py-6">
-      <h2 className="mb-1 text-[13px] font-semibold text-gray-800">확인 대기 ({items.length})</h2>
-      {items.map((item) => (
+      <h2 className="h-5 text-[13px] font-semibold text-gray-800"><button type="button" onClick={toggle} disabled={loading || items.length === 0} aria-expanded={open && !loading && items.length > 0}>확인 대기 ({loading ? '불러오는 중…' : items.length})</button></h2>
+      {open && !loading && items.map((item) => (
         <div key={item.rowNumber} className="border-b border-gray-50 py-3">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">

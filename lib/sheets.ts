@@ -1,3 +1,4 @@
+import { parseAliases } from './paymentMethodAliases';
 import { google } from 'googleapis';
 import { DEFAULT_FILE_NAME } from './fileNameStorage';
 
@@ -167,14 +168,14 @@ export async function ensurePaymentMethodRegistered(
   // 시트 생성 후 헤더 쓰기가 실패해도 다음 호출에서 복구합니다.
   const header = await sheetsApi.spreadsheets.values.get({
     spreadsheetId,
-    range: "'설정'!A1",
+    range: "'설정'!A1:B1",
   });
-  if ((header.data.values ?? []).length === 0) {
+  if (!header.data.values?.[0]?.[0] || !header.data.values?.[0]?.[1]) {
     await sheetsApi.spreadsheets.values.update({
       spreadsheetId,
-      range: "'설정'!A1",
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values: [['결제수단']] },
+      range: "'설정'!A1:B1",
+      valueInputOption: 'RAW',
+      requestBody: { values: [['결제수단', '알림 표기']] },
     });
   }
 
@@ -187,7 +188,7 @@ export async function ensurePaymentMethodRegistered(
   await sheetsApi.spreadsheets.values.append({
     spreadsheetId,
     range: "'설정'!A2:A",
-    valueInputOption: 'USER_ENTERED',
+    valueInputOption: 'RAW',
     requestBody: { values: [[trimmedMethod]] },
   });
 }
@@ -491,4 +492,74 @@ export async function renameSpreadsheetFile(
     fileId: spreadsheetId,
     requestBody: { name: newName },
   });
+}
+
+export class PaymentMethodError extends Error {
+  constructor(message: string, public status: number) { super(message); }
+}
+
+export async function listPaymentMethodEntries(
+  credentials: string | InstanceType<typeof google.auth.JWT>, spreadsheetId: string
+): Promise<(import('./paymentMethodAliases').PaymentMethodEntry & { rowNumber: number })[]> {
+  const api = google.sheets({ version: 'v4', auth: typeof credentials === 'string' ? authClient(credentials) : credentials });
+  if (!(await listSheets(api, spreadsheetId)).some((sheet) => sheet.title === '설정')) return [];
+  const result = await api.spreadsheets.values.get({ spreadsheetId, range: "'설정'!A2:B" });
+  return (result.data.values ?? []).map((row, index) => ({
+    name: String(row[0] ?? ''), aliases: parseAliases(String(row[1] ?? '')), rowNumber: index + 2,
+  })).filter((entry) => entry.name !== '');
+}
+
+async function writePaymentMethod(accessToken: string, spreadsheetId: string, rowNumber: number, name: string, aliases: string[]) {
+  const api = google.sheets({ version: 'v4', auth: authClient(accessToken) });
+  await api.spreadsheets.values.update({ spreadsheetId, range: "'설정'!B1", valueInputOption: 'RAW', requestBody: { values: [['알림 표기']] } });
+  await api.spreadsheets.values.update({ spreadsheetId, range: `'설정'!A${rowNumber}:B${rowNumber}`, valueInputOption: 'RAW', requestBody: { values: [[name, aliases.join(', ')]] } });
+}
+
+export async function rememberPaymentMethodAlias(accessToken: string, spreadsheetId: string, name: string, alias: string) {
+  await ensurePaymentMethodRegistered(accessToken, spreadsheetId, name);
+  const entry = (await listPaymentMethodEntries(accessToken, spreadsheetId)).find((entry) => entry.name === name.trim());
+  if (!entry) throw new Error('결제수단을 찾을 수 없습니다.');
+  await writePaymentMethod(accessToken, spreadsheetId, entry.rowNumber, entry.name, parseAliases([...entry.aliases, alias].join(',')));
+}
+
+export async function createPaymentMethod(accessToken: string, spreadsheetId: string, name: string, aliases: string[]) {
+  const entries = await listPaymentMethodEntries(accessToken, spreadsheetId);
+  if (entries.some((entry) => entry.name === name)) throw new PaymentMethodError('이미 있는 결제수단입니다.', 409);
+  await ensurePaymentMethodRegistered(accessToken, spreadsheetId, name);
+  const entry = (await listPaymentMethodEntries(accessToken, spreadsheetId)).find((entry) => entry.name === name);
+  if (!entry) throw new Error('결제수단을 찾을 수 없습니다.');
+  await writePaymentMethod(accessToken, spreadsheetId, entry.rowNumber, name, aliases);
+}
+
+export async function updatePaymentMethod(accessToken: string, spreadsheetId: string, originalName: string, name?: string, aliases?: string[]): Promise<number> {
+  const entries = await listPaymentMethodEntries(accessToken, spreadsheetId);
+  const entry = entries.find((entry) => entry.name === originalName);
+  if (!entry) throw new PaymentMethodError('결제수단을 찾을 수 없습니다.', 404);
+  const newName = name ?? originalName;
+  if (newName !== originalName && entries.some((item) => item.name === newName)) throw new PaymentMethodError('이미 있는 결제수단입니다.', 409);
+  const api = google.sheets({ version: 'v4', auth: authClient(accessToken) });
+  let replacedCount = 0;
+  if (newName !== originalName) {
+    const sheets = await listSheets(api, spreadsheetId);
+    for (const sheet of sheets.filter((sheet) => MONTH_SHEET_TITLE_PATTERN.test(sheet.title) || sheet.title === '대기')) {
+      const range = `'${sheet.title}'!E`;
+      const result = await api.spreadsheets.values.get({ spreadsheetId, range: `${range}2:E` });
+      const data = (result.data.values ?? []).flatMap((row, index) => row[0] === originalName
+        ? [{ range: `${range}${index + 2}`, values: [[newName]] }] : []);
+      if (data.length) await api.spreadsheets.values.batchUpdate({ spreadsheetId, requestBody: { valueInputOption: 'RAW', data } });
+      replacedCount += data.length;
+    }
+  }
+  await writePaymentMethod(accessToken, spreadsheetId, entry.rowNumber, newName, aliases ?? entry.aliases);
+  return replacedCount;
+}
+
+export async function deletePaymentMethod(accessToken: string, spreadsheetId: string, name: string) {
+  const entry = (await listPaymentMethodEntries(accessToken, spreadsheetId)).find((entry) => entry.name === name);
+  if (!entry) throw new PaymentMethodError('결제수단을 찾을 수 없습니다.', 404);
+  const api = google.sheets({ version: 'v4', auth: authClient(accessToken) });
+  const sheet = (await listSheets(api, spreadsheetId)).find((sheet) => sheet.title === '설정')!;
+  await api.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests: [{ deleteDimension: { range: {
+    sheetId: sheet.sheetId, dimension: 'ROWS', startIndex: entry.rowNumber - 1, endIndex: entry.rowNumber,
+  } } }] } });
 }

@@ -134,7 +134,8 @@ describe('대시보드 확인 대기', () => {
 
   async function openPending() {
     render(<ExpenseDashboard />);
-    await waitFor(() => expect(screen.getByRole('button', { name: '확인' })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole('button', { name: '확인 대기 (1)' })).toBeEnabled());
+    if (screen.getByRole('button', { name: '확인 대기 (1)' }).getAttribute('aria-expanded') === 'false') fireEvent.click(screen.getByRole('button', { name: '확인 대기 (1)' }));
     const section = screen.getByRole('heading', { name: '지출 입력' }).parentElement!;
     Object.defineProperty(section, 'scrollIntoView', { value: vi.fn(), configurable: true });
     fireEvent.click(screen.getByRole('button', { name: '확인' }));

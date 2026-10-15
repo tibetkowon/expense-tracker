@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ExpenseRowWithNumber } from '@/lib/sheets';
 import type { ExpenseInput } from '@/lib/expense';
 import type { PendingRowWithNumber } from '@/lib/pending';
+import PaymentMethodManager from '@/components/PaymentMethodManager';
 import PendingList from '@/components/PendingList';
 import type { ReceiptExtraction } from '@/lib/ocr';
 import { ReceiptUpload } from '@/components/ReceiptUpload';
@@ -40,6 +41,8 @@ export default function ExpenseDashboard() {
     fileName: DEFAULT_FILE_NAME,
   });
   const [editingExpense, setEditingExpense] = useState<(ExpenseRowWithNumber & { month: string }) | null>(null);
+  const [pendingLoading, setPendingLoading] = useState(true);
+  const [pendingSource, setPendingSource] = useState(dataSource);
   const [pendingItems, setPendingItems] = useState<PendingRowWithNumber[]>([]);
   const [confirmingPending, setConfirmingPending] = useState<PendingRowWithNumber | null>(null);
   const [draftValues, setDraftValues] = useState<ReceiptExtraction | null>(null);
@@ -123,6 +126,7 @@ export default function ExpenseDashboard() {
 
   const fetchPending = useCallback(async () => {
     const requestId = ++latestPendingRequestId.current;
+    setPendingLoading(true);
     // 대기 행 삭제 후에는 뒤쪽 행 번호도 바뀌므로 선택을 함께 초기화합니다.
     setConfirmingPending(null);
     setPendingItems([]);
@@ -138,8 +142,11 @@ export default function ExpenseDashboard() {
       const data = (await response.json()) as { items: PendingRowWithNumber[] };
       if (requestId !== latestPendingRequestId.current) return;
       setPendingItems(data.items);
+      setPendingSource({ folderId, fileName });
     } catch {
       // 조회 실패 시 확인 대기 섹션을 비워 둡니다.
+    } finally {
+      if (requestId === latestPendingRequestId.current) setPendingLoading(false);
     }
   }, []);
 
@@ -195,6 +202,7 @@ export default function ExpenseDashboard() {
         <MonthlySummary total={monthlyTotal} month={selectedMonth} />
         <PendingList
           items={pendingItems}
+          loading={pendingLoading}
           onConfirmPayment={(item) => {
             if (item.type !== '결제') return;
             setEditingExpense(null);
@@ -211,8 +219,8 @@ export default function ExpenseDashboard() {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  folderId: dataSource.folderId,
-                  fileName: dataSource.fileName,
+                  folderId: pendingSource.folderId,
+                  fileName: pendingSource.fileName,
                   rowNumber: item.rowNumber,
                 }),
               });
@@ -227,6 +235,7 @@ export default function ExpenseDashboard() {
             }
           }}
         />
+        <PaymentMethodManager onChanged={async () => { await fetchMonth(selectedMonth); await fetchPending(); }} />
         <ReceiptUpload onExtracted={(data) => {
           // 사진 선택 시 전달된 콜백의 세대를 확인해 초기화 이전 응답을 무시합니다.
           if (ocrGeneration !== latestOcrGeneration.current) return;
@@ -245,8 +254,8 @@ export default function ExpenseDashboard() {
             editFileName={dataSource.fileName}
             onCancelEdit={() => setEditingExpense(null)}
             confirmingPendingRowNumber={confirmingPending?.rowNumber}
-            confirmFolderId={dataSource.folderId}
-            confirmFileName={dataSource.fileName}
+            confirmFolderId={pendingSource.folderId}
+            confirmFileName={pendingSource.fileName}
             onCancelConfirm={() => setConfirmingPending(null)}
             onSubmittingChange={setMutating}
             onSubmitted={async (month) => {

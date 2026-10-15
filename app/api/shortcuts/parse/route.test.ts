@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   findServiceAccountSpreadsheetId: vi.fn(),
   extractNotificationData: vi.fn(),
   appendPendingRow: vi.fn(),
+  listPaymentMethodEntries: vi.fn(),
 }));
 vi.mock('@/lib/serviceAccount', () => ({
   getServiceAccountAuth: mocks.getServiceAccountAuth,
@@ -15,6 +16,7 @@ vi.mock('@/lib/serviceAccount', () => ({
 vi.mock('@/lib/notificationParse', () => ({
   extractNotificationData: mocks.extractNotificationData,
 }));
+vi.mock('@/lib/sheets', () => ({ listPaymentMethodEntries: mocks.listPaymentMethodEntries }));
 vi.mock('@/lib/pending', () => ({ appendPendingRow: mocks.appendPendingRow }));
 
 const auth = {};
@@ -49,6 +51,7 @@ beforeEach(() => {
   mocks.findServiceAccountSpreadsheetId.mockResolvedValue('sheet-id');
   mocks.extractNotificationData.mockResolvedValue(extraction);
   mocks.appendPendingRow.mockResolvedValue(undefined);
+  mocks.listPaymentMethodEntries.mockResolvedValue([]);
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -189,4 +192,16 @@ describe('단축어 알림 파싱 API', () => {
     expect(await response.json()).toEqual({ error: '알림 저장 중 오류가 발생했습니다.' });
     if (stage !== 'append') expect(mocks.appendPendingRow).not.toHaveBeenCalled();
   });
+});
+
+it('서비스 계정으로 별칭을 읽어 대기 결제수단에 반영합니다', async () => {
+  mocks.listPaymentMethodEntries.mockResolvedValue([{ name: '내 카드', aliases: ['신한카드'] }]);
+  expect((await POST(request())).status).toBe(200);
+  expect(mocks.listPaymentMethodEntries).toHaveBeenCalledWith(auth, 'sheet-id');
+  expect(mocks.appendPendingRow).toHaveBeenCalledWith(auth, 'sheet-id', expect.objectContaining({ method: '내 카드' }));
+});
+it('별칭 조회 실패에도 원본으로 저장합니다', async () => {
+  mocks.listPaymentMethodEntries.mockRejectedValue(new Error('조회 실패'));
+  expect((await POST(request())).status).toBe(200);
+  expect(mocks.appendPendingRow).toHaveBeenCalledWith(auth, 'sheet-id', expect.objectContaining({ method: '신한카드' }));
 });

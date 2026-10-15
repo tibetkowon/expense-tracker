@@ -160,3 +160,17 @@ describe('확인 대기 저장', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+it.each([true, false])('확인 중 별칭 기억 체크 상태 %s를 요청에 반영합니다', async (remember) => {
+  fetchMock.mockResolvedValue({ ok: true });
+  render(<ExpenseForm paymentMethods={['신한카드']} onSubmitted={vi.fn()} confirmingPendingRowNumber={2}
+    initialValues={{ date: '2026-10-15', amount: 1000, category: '식비', method: '1234' }} />);
+  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('결제수단'), { target: { value: '신한카드' } });
+  expect(screen.getByRole('checkbox')).toBeChecked();
+  if (!remember) fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button', { name: '저장' }));
+  await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+  const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+  expect(body.rememberAlias).toBe(remember ? '1234' : undefined);
+});

@@ -1,3 +1,5 @@
+import { listPaymentMethodEntries } from '@/lib/sheets';
+import { matchPaymentMethod } from '@/lib/paymentMethodAliases';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { extractNotificationData } from '@/lib/notificationParse';
@@ -55,12 +57,16 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
+    let method = extraction.method ?? '';
+    try {
+      method = matchPaymentMethod(text, method, await listPaymentMethodEntries(auth, spreadsheetId));
+    } catch { /* 설정 조회 실패는 알림 저장을 막지 않습니다. */ }
     await appendPendingRow(auth, spreadsheetId, {
       date: receivedDate,
       amount: extraction.amount ?? 0,
       category: extraction.categoryGuess ?? '',
       memo: extraction.merchant ?? '',
-      method: extraction.method ?? '',
+      method,
       type: pendingType,
       rawText: text,
     });

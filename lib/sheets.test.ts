@@ -550,7 +550,7 @@ describe('빈 기본 시트 정리', () => {
     let deleted = false;
     api.values.get.mockImplementation(async ({ range }: { range: string }) => {
       if (range === '2026-09!A1:E1') return { data: { values: [header] } };
-      if (range === "'설정'!A1") return { data: { values: [['결제수단']] } };
+      if (range === "'설정'!A1:B1") return { data: { values: [['결제수단', '알림 표기']] } };
       if (range === "'설정'!A2:A") return { data: { values: [['카드']] } };
       reads += 1;
       if (failureStage === 'read' && reads === 2) {
@@ -746,7 +746,7 @@ describe('updateExpenseRow', () => {
       { properties: { sheetId: 8, title: '설정' } },
     ] } });
     spreadsheets.values.get.mockImplementation(({ range }: { range: string }) =>
-      Promise.resolve({ data: { values: [[range === "'설정'!A1" ? '결제수단' : '현금']] } })
+      Promise.resolve({ data: { values: [range === "'설정'!A1:B1" ? ['결제수단', '알림 표기'] : ['현금']] } })
     );
 
     await updateExpenseRow('token', 'sheet-id', '2026-09', rowNumber, row);
@@ -881,12 +881,12 @@ describe('결제수단 설정', () => {
       requestBody: { requests: [{ addSheet: { properties: { title: '설정' } } }] },
     });
     expect(api.values.update).toHaveBeenCalledWith({
-      spreadsheetId: 'sheet-id', range: "'설정'!A1",
-      valueInputOption: 'USER_ENTERED', requestBody: { values: [['결제수단']] },
+      spreadsheetId: 'sheet-id', range: "'설정'!A1:B1",
+      valueInputOption: 'RAW', requestBody: { values: [['결제수단', '알림 표기']] },
     });
     expect(api.values.append).toHaveBeenCalledWith({
       spreadsheetId: 'sheet-id', range: "'설정'!A2:A",
-      valueInputOption: 'USER_ENTERED', requestBody: { values: [['신한카드']] },
+      valueInputOption: 'RAW', requestBody: { values: [['신한카드']] },
     });
     expect(vi.mocked(api.batchUpdate).mock.invocationCallOrder[0])
       .toBeLessThan(vi.mocked(api.values.update).mock.invocationCallOrder[0]);
@@ -895,7 +895,7 @@ describe('결제수단 설정', () => {
   });
 
   it('이미 등록된 값은 trim 후 중복 추가하지 않습니다', async () => {
-    vi.mocked(api.values.get).mockResolvedValue({ data: { values: [['신한카드']] } } as never);
+    vi.mocked(api.values.get).mockResolvedValue({ data: { values: [['신한카드', '알림 표기']] } } as never);
     await ensurePaymentMethodRegistered('token', 'sheet-id', row.method);
     expect(api.batchUpdate).not.toHaveBeenCalled();
     expect(api.values.update).not.toHaveBeenCalled();
@@ -945,7 +945,7 @@ describe('결제수단 설정', () => {
       { properties: { sheetId: 7, title: '2026-09' } },
     ] } } as never);
     vi.mocked(api.values.get).mockImplementation((async ({ range }: { range: string }) => ({
-      data: { values: range === "'설정'!A2:A" ? [] : [['헤더']] },
+      data: { values: range === "'설정'!A2:A" ? [] : [['헤더', '알림 표기']] },
     })) as never);
     if (operation === 'append') {
       await appendExpenseRow('token', 'sheet-id', '2026-09', row);
@@ -954,7 +954,7 @@ describe('결제수단 설정', () => {
     }
     expect(api.values.append).toHaveBeenLastCalledWith({
       spreadsheetId: 'sheet-id', range: "'설정'!A2:A",
-      valueInputOption: 'USER_ENTERED', requestBody: { values: [['신한카드']] },
+      valueInputOption: 'RAW', requestBody: { values: [['신한카드']] },
     });
     const write = operation === 'append' ? api.values.append : api.values.update;
     expect(write).toHaveBeenCalledWith(expect.objectContaining({
@@ -974,7 +974,7 @@ describe('결제수단 설정', () => {
         { properties: { sheetId: 7, title: '2026-09' } },
       ] } } as never);
       vi.mocked(api.values.get).mockImplementation((async ({ range }: { range: string }) => ({
-        data: { values: range === "'설정'!A2:A" ? [] : [['헤더']] },
+        data: { values: range === "'설정'!A2:A" ? [] : [['헤더', '알림 표기']] },
       })) as never);
       // 실제 등록 함수가 설정 시트에 쓰는 단계에서 실패하도록 모킹합니다.
       vi.mocked(api.values.append).mockImplementation((async ({ range }: { range: string }) => {
@@ -994,7 +994,7 @@ describe('결제수단 설정', () => {
       }));
       expect(api.values.append).toHaveBeenLastCalledWith({
         spreadsheetId: 'sheet-id', range: "'설정'!A2:A",
-        valueInputOption: 'USER_ENTERED', requestBody: { values: [['신한카드']] },
+        valueInputOption: 'RAW', requestBody: { values: [['신한카드']] },
       });
       expect(write).toHaveBeenCalledTimes(operation === 'append' ? 2 : 1);
       expect(consoleError).toHaveBeenCalledTimes(1);

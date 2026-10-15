@@ -7,12 +7,14 @@ const mocks = vi.hoisted(() => ({
   find: vi.fn(),
   append: vi.fn(),
   remove: vi.fn(),
+  remember: vi.fn(),
 }));
 
 vi.mock('@/auth', () => ({ auth: mocks.auth }));
 vi.mock('@/lib/sheets', () => ({
   findOrCreateSpreadsheet: mocks.find,
   appendExpenseRow: mocks.append,
+  rememberPaymentMethodAlias: mocks.remember,
 }));
 vi.mock('@/lib/pending', () => ({ deletePendingRow: mocks.remove }));
 
@@ -117,4 +119,16 @@ describe('대기 항목 확인 API', () => {
     await expect(POST(request({ ...expense, pendingRowNumber: 2 }))).rejects.toBe(error);
     expect(mocks.append).toHaveBeenCalledExactlyOnceWith('token', 'sheet-id', '2026-08', expense);
   });
+});
+
+it.each([false, true])('별칭 저장 실패 여부(%s)와 무관하게 확인에 성공합니다', async (fails) => {
+  if (fails) mocks.remember.mockRejectedValue(new Error('쓰기 실패'));
+  expect((await POST(request({ ...expense, pendingRowNumber: 2, rememberAlias: '1234' }))).status).toBe(200);
+  expect(mocks.remember).toHaveBeenCalledWith('token', 'sheet-id', '현금', '1234');
+  expect(mocks.append).toHaveBeenCalledTimes(1);
+  expect(mocks.remove).toHaveBeenCalledTimes(1);
+});
+it.each([42, '', null])('잘못된 별칭 %j은 저장 전에 거부합니다', async (rememberAlias) => {
+  expect((await POST(request({ ...expense, pendingRowNumber: 2, rememberAlias }))).status).toBe(400);
+  expect(mocks.append).not.toHaveBeenCalled();
 });

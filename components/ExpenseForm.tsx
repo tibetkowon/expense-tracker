@@ -65,6 +65,9 @@ export default function ExpenseForm({
   const [category, setCategory] = useState(initialValues.category ?? '');
   const [memo, setMemo] = useState(initialValues.memo ?? '');
   const [method, setMethod] = useState(initialValues.method ?? '체크카드');
+  const [rememberAlias, setRememberAlias] = useState(true);
+  const originalMethod = initialValues.method ?? '';
+  const canRemember = confirming && originalMethod.trim() !== '' && method.trim() !== '' && originalMethod !== method.trim();
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -94,8 +97,8 @@ export default function ExpenseForm({
       // Editing targets the exact file the edited row was read from (passed down by
       // the dashboard), not whatever the storage-location picker currently says —
       // those can drift apart since that picker doesn't share state with this form.
-      const folderId = editing ? (editFolderId ?? getSavedFolderId())
-        : confirming ? (confirmFolderId ?? getSavedFolderId()) : getSavedFolderId();
+      const folderId = editing ? (editFolderId === undefined ? getSavedFolderId() : editFolderId)
+        : confirming ? (confirmFolderId === undefined ? getSavedFolderId() : confirmFolderId) : getSavedFolderId();
       const fileName = editing ? (editFileName ?? getSavedFileName())
         : confirming ? (confirmFileName ?? getSavedFileName()) : getSavedFileName();
       const response = await fetch(confirming ? '/api/pending/confirm' : '/api/expenses', {
@@ -105,6 +108,7 @@ export default function ExpenseForm({
           date, amount: Number(amount), category, memo, method, folderId, fileName,
           ...(editing ? { month: originalMonth, rowNumber: editingRowNumber } : {}),
           ...(confirming ? { pendingRowNumber: confirmingPendingRowNumber } : {}),
+          ...(canRemember && rememberAlias ? { rememberAlias: originalMethod } : {}),
         }),
       });
 
@@ -152,6 +156,10 @@ export default function ExpenseForm({
           {paymentMethods.map((m) => <option key={m} value={m} />)}
         </datalist>
       </label>
+      {canRemember && <label className="text-[12px] text-gray-600">
+        <input type="checkbox" checked={rememberAlias} onChange={(event) => setRememberAlias(event.target.checked)} />
+        {` 알림 표기 "${originalMethod}"를 "${method.trim()}"으로 기억`}
+      </label>}
       {error ? <p role="alert" className="text-[12px] text-red-500">{error}</p> : null}
       <button type="submit" disabled={submitting} className="mt-1 w-full rounded-full bg-indigo-600 py-3 text-[14px] font-semibold text-white active:bg-indigo-700 disabled:opacity-60">
         {submitting ? '저장 중...' : editing ? '수정 완료' : '저장'}
