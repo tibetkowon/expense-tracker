@@ -46,7 +46,7 @@ export async function GET(request: Request) {
   const { total } = summarizeByMonth(expenses, selectedMonth);
 
   return NextResponse.json({
-    expenses: expenses.reverse(),
+    expenses: expenses.sort((a, b) => b.date.localeCompare(a.date) || b.rowNumber - a.rowNumber),
     monthlyTotal: total,
     availableMonths,
     selectedMonth,

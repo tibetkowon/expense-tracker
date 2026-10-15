@@ -52,6 +52,13 @@ describe('지출 조회 결제수단', () => {
     expect(mocks.methods).toHaveBeenCalledWith('token', 'sheet-id');
   });
 
+  it('입력 순서와 상관없이 날짜 내림차순으로 반환합니다 (같은 날은 나중 행이 먼저)', async () => {
+    const row = (date: string, rowNumber: number) => ({ date, amount: 1, category: '기타', memo: '', method: '현금', rowNumber });
+    mocks.read.mockResolvedValue([row('2026-09-10', 2), row('2026-09-03', 3), row('2026-09-10', 4)]);
+    const response = await GET(new Request('http://localhost/api/expenses?month=2026-09'));
+    expect((await response.json()).expenses.map((e: { rowNumber: number }) => e.rowNumber)).toEqual([4, 2, 3]);
+  });
+
   it.each([{ months: ['2026-09'] }, { months: [] }])('등록된 결제수단이 없으면 기본값을 반환합니다: $months', async ({ months }) => {
     mocks.months.mockResolvedValue(months);
     const response = await GET(new Request('http://localhost/api/expenses?month=2026-09'));
